@@ -31,7 +31,10 @@ do_kernel_make()
 		esac
 	fi
 	
-	cp -vf config-$KERNEL_RELEASE $KERNEL_SOURCE/.config
+	# If the repository config file is newer, just use it
+	if [ "config-$KERNEL_RELEASE" -nt "$KERNEL_SOURCE/.config" ]; then
+		cp -vf config-$KERNEL_RELEASE $KERNEL_SOURCE/.config
+	fi
 	make -C $KERNEL_SOURCE
 	cp -vf $KERNEL_SOURCE/.config config-$KERNEL_RELEASE
 	make install -C $KERNEL_SOURCE
