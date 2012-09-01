@@ -343,11 +343,11 @@ build_root_fs()
 		rm -f $ROOT_DIR/etc/udev/rules.d/*-network.rules
 
 		# Remove the 2 files is for SECURITY
-		[ -d "$ROOT_DIR/root/.ssh" ] && rm -rf $ROOT_DIR/root/.ssh
-		[ -e "$ROOT_DIR/root/.bash_history" ] && echo -n >$ROOT_DIR/root/.bash_history
+		rm -f $ROOT_DIR/root/.ssh/known_hosts
+		rm -f $ROOT_DIR/root/.bash_history
 
 		# Remove device.map so that grub-install can work
-		[ -e "$ROOT_DIR/boot/grub/device.map" ] && rm -f $ROOT_DIR/boot/grub/device.map
+		rm -f $ROOT_DIR/boot/grub/device.map
 
 		# Update root description for GRUB
 		if [ -e "$ROOT_DIR/boot/grub/menu.lst" ]; then
