@@ -31,7 +31,7 @@ do_kernel_make()
 		esac
 	fi
 	
-	cp -f config-$KERNEL_RELEASE $KERNEL_SOURCE/.config
+	cp -vf config-$KERNEL_RELEASE $KERNEL_SOURCE/.config
 	make -C $KERNEL_SOURCE
 	cp -vf $KERNEL_SOURCE/.config config-$KERNEL_RELEASE
 	make install -C $KERNEL_SOURCE
@@ -102,6 +102,17 @@ do_install()
 	cp -af /boot/*-$KERNEL_RELEASE $VFS_IMAGE $__flash_mnt/boot/
 	umount $__flash_mnt
 	rmdir $__flash_mnt
+
+	echo ">>> Note that you may probably need to add this option to '/boot/grub/menu.lst', and run 'grub-install' to the flash disk:"
+	cat <<EOF
+
+title       Linux - $KERNEL_RELEASE (ramdisk)
+root        (hd0,0)
+kernel      /boot/vmlinuz-$KERNEL_RELEASE root=/dev/ram0 rw
+initrd      /boot/vfs-full.gz
+
+EOF
+
 }
 
 do_clean()
