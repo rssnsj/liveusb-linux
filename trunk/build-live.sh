@@ -59,7 +59,6 @@ do_vfs_make()
 		# Build /dev directory
 		mkdir -p $__vfs_mnt/dev
 		cd $__vfs_mnt/dev
-		
 		mknod ram0 b 1 0
 		mknod ram1 b 1 1
 		mknod ram2 b 1 2
@@ -77,8 +76,11 @@ do_vfs_make()
 		mknod ptmx c 5 2
 		mknod urandom c 1 9
 		mknod zero c 1 5
-		
 		mkdir -p pts shm
+		
+		# Fix /etc/ssh permissions
+		cd $__vfs_mnt/etc/ssh
+		chmod 600 *_key
 	)
 	cp -auvf /lib/modules/$KERNEL_RELEASE $__vfs_mnt/lib/modules/
 	umount $__vfs_mnt
@@ -137,7 +139,7 @@ case "$1" in
 		echo "Usage:"
 		echo "  $0 create             -- create kernel and filesystem images"
 		echo "  $0 clean              -- clean temporary and target files"
-		echo "  $0 install /dev/sdxn  -- synchronize to your flash disk (<label> for mount)"
+		echo "  $0 install /dev/sdxn  -- synchronize to your flash disk"
 		echo "  $0                    -- show this help"
 		;;
 esac
