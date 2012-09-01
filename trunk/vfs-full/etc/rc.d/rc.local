@@ -11,21 +11,62 @@ udevtrigger
 mkdir -p /dev/pts
 mount devpts /dev/pts -t devpts
 
-do_ifconfig()
+set_interface()
 {
 	local cmd="$1"
-	local dev_name=`echo "$cmd" |awk -F= '{print $1}'`
+	local dev_desc=`echo "$cmd" |awk -F= '{print $1}'`
 	local dev_cmd=`echo "$cmd" |awk -F= '{print $2}'`
 	local if_addr=`echo "$dev_cmd" |awk -F, '{print $1}'`
 	local if_gateway=`echo "$dev_cmd" |awk -F, '{print $2}'`
+	local if_name=""
 
-	ifconfig $dev_name $if_addr
-	route add default gw $if_gateway
+	(
+		# Get device name by MAC address
+		while true; do
+			case "$dev_desc" in
+				eth*)
+					if_name=$dev_desc
+					;;
+				??:??:??:??:??:??)
+					if_name=`ifconfig -a | grep -i HWaddr | awk -vmac=$dev_desc 'tolower(mac)==tolower($NF){print $1;exit}'`
+					;;
+			esac
+			# Wait for the device to get ready
+			if [ ! -z "$if_name" ] && ifconfig "$if_name" >/dev/null 2>&1; then
+				break;
+			else
+				sleep 0.3
+			fi
+		done
+
+		if [ ! -z "$if_name" -a ! -z "$if_addr" ]; then
+			echo "-- Setting '$if_name' address: $if_addr"
+			ifconfig $if_name $if_addr up
+		fi
+		if [ ! -z "$if_gateway" ]; then
+			echo "-- Setting default gateway: $if_gateway"
+			route add default gw $if_gateway
+		fi
+		sleep 20
+	) &
 }
 
+#
+# '/proc/cmdline', e.g.:
+#   root=/dev/sda1 eth0=192.168.70.2/24,192.168.70.1 eth1=192.168.71.2/24
+#   root=/dev/sda1 00:90:0b:0a:d5:e7=192.168.70.2/24,192.168.70.1
+#
 for cmd in `cat /proc/cmdline`; do
 	case "$cmd" in
-		eth?=*) do_ifconfig "$cmd";;
+		eth?=*)
+			set_interface "$cmd"
+			;;
+		eth??=*)
+			set_interface "$cmd"
+			;;
+		??:??:??:??:??:??=*)
+			set_interface "$cmd"
+			;;
 	esac
 done
 
