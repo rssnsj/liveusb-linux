@@ -2,20 +2,40 @@
 
 PWD=`pwd`
 
+KERNEL_VERSION=2.6.32.8
+KERNEL_DOWNLOAD_URL="http://rssn.tk/Repository/sources/linux-2.6.32.8.tar.bz2"
+
 VFS_SOURCE=$PWD/vfs-full
 VFS_IMAGE=$PWD/vfs-full.gz
-KERNEL_SOURCE=$PWD/linux-2.6.32.8-liveusb
-
-KERNEL_VERSION=2.6.32.8-liveusb
+KERNEL_SOURCE=$PWD/linux-$KERNEL_VERSION
+KERNEL_RELEASE=$KERNEL_VERSION-liveusb
 
 
 do_kernel_make()
 {
-	[ ! -e $KERNEL_SOURCE/.config ] && cp -f config-$KERNEL_VERSION $KERNEL_SOURCE/.config
+	# Check if kernel source exists, if not download it
+	if [ ! -e $KERNEL_SOURCE ]; then
+		local __kernel_tar=`basename "$KERNEL_DOWNLOAD_URL"`
+		[ ! -e "$__kernel_tar" ] && wget $KERNEL_DOWNLOAD_URL -O $__kernel_tar
+		case "$__kernel_tar" in
+			*.tar.bz2)
+				tar -jxvf $__kernel_tar
+				;;
+			*.tar.gz)
+				tar -zxvf $__kernel_tar
+				;;
+			*)
+				echo "*** Invalid tarball format '$__kernel_tar'."
+				exit 1
+				;;
+		esac
+	fi
+	
+	cp -f config-$KERNEL_RELEASE $KERNEL_SOURCE/.config
 	make -C $KERNEL_SOURCE
-	cp -vf $KERNEL_SOURCE/.config config-$KERNEL_VERSION
+	cp -vf $KERNEL_SOURCE/.config config-$KERNEL_RELEASE
 	make install -C $KERNEL_SOURCE
-	depmod $KERNEL_VERSION
+	depmod $KERNEL_RELEASE
 
 }
 
@@ -27,7 +47,7 @@ do_vfs_make()
 	do_kernel_make
 	
 	mkdir -p boot
-	cp -af /boot/*-$KERNEL_VERSION boot/
+	cp -af /boot/*-$KERNEL_RELEASE boot/
 	mkdir -p $__vfs_mnt
 	dd if=/dev/zero of=$__vfs_loop bs=1M count=64
 	echo y | mkfs.ext2 -I128 -L vfs-full $__vfs_loop
@@ -60,7 +80,7 @@ do_vfs_make()
 		
 		mkdir -p pts shm
 	)
-	cp -auvf /lib/modules/$KERNEL_VERSION $__vfs_mnt/lib/modules/
+	cp -auvf /lib/modules/$KERNEL_RELEASE $__vfs_mnt/lib/modules/
 	umount $__vfs_mnt
 	rmdir $__vfs_mnt
 	gzip -c $__vfs_loop > $VFS_IMAGE
@@ -79,7 +99,7 @@ do_install()
 	mkdir -p $__flash_mnt
 	mount $__flash_dev $__flash_mnt
 	[ ! -e $__flash_mnt/boot ] && mkdir $__flash_mnt/boot
-	cp -af /boot/*-$KERNEL_VERSION $VFS_IMAGE $__flash_mnt/boot/
+	cp -af /boot/*-$KERNEL_RELEASE $VFS_IMAGE $__flash_mnt/boot/
 	umount $__flash_mnt
 	rmdir $__flash_mnt
 }
