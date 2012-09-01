@@ -341,19 +341,23 @@ build_root_fs()
 		# Remove udev network rules
 		rm -f $ROOT_DIR/etc/udev/rules.d/*-persistent-net.rules
 		rm -f $ROOT_DIR/etc/udev/rules.d/*-network.rules
+
 		# Remove the 2 files is for SECURITY
 		[ -d "$ROOT_DIR/root/.ssh" ] && rm -rf $ROOT_DIR/root/.ssh
 		[ -e "$ROOT_DIR/root/.bash_history" ] && echo -n >$ROOT_DIR/root/.bash_history
+
 		# Remove device.map so that grub-install can work
 		[ -e "$ROOT_DIR/boot/grub/device.map" ] && rm -f $ROOT_DIR/boot/grub/device.map
+
 		# Update root description for GRUB
 		if [ -e "$ROOT_DIR/boot/grub/menu.lst" ]; then
-			sed -i "s# root=[^ \t]\+# root=$__root_desc#g" $ROOT_DIR/boot/grub/menu.lst
+			sed -i "s# root=\(LABEL=\|/dev/[hs]d[a-z]\)[^ \t]*# root=$__root_desc#g" $ROOT_DIR/boot/grub/menu.lst
 			local root_i=`expr $ROOT_FS_DEV : '\/dev\/[sh]d[a-z]\([0-9]\)'`
 			[ ! -z "$root_i" ] && root_i=`expr $root_i - 1` || root_i=0
 			sed -i "/^[ \t]*root/s/(hd[0-9],[0-9])/(hd0,$root_i)/" $ROOT_DIR/boot/grub/menu.lst
 		fi
-		# Update mount descriptions in '$ROOT_DIR/etc/fstab' 
+
+		# Update mount descriptions in '/etc/fstab' 
 		if [ -e "$ROOT_DIR/etc/fstab" ]; then
 			# Mount options for '/'
 			sed -i "s#^[^ \t]\+\([ \t]\+\/[ \t]\+\)[^ \t]\+#$__root_desc\1$ROOT_FS_TYPE#" $ROOT_DIR/etc/fstab
@@ -370,6 +374,7 @@ build_root_fs()
 				echo "$__part3_desc    $PART3_FS_MOUNT_POINT    $PART3_FS_TYPE    defaults        0       0" >> $ROOT_DIR/etc/fstab
 			fi
 		fi
+
 		# Update hostname if it is defined
 		if [ ! -z "$ROOT_HOSTNAME" ]; then
 			# For Debian, Ubuntu...
@@ -378,6 +383,7 @@ build_root_fs()
 			[ -f "$ROOT_DIR/etc/sysconfig/network" ] && \
 				sed -i "s/^HOSTNAME=.*/HOSTNAME=$ROOT_HOSTNAME/g" $ROOT_DIR/etc/sysconfig/network
 		fi
+
 		# Do modifications for liveusb system
 		if [ "$ENABLE_LIVEUSB" = "y" ]; then
 			(
