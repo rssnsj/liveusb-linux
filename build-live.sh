@@ -1,18 +1,36 @@
 #!/bin/sh -e
 
-PWD=`pwd`
+cd `dirname $0`
 
 KERNEL_VERSION=2.6.32.8
+KERNEL_RELEASE=$KERNEL_VERSION-liveusb
 KERNEL_DOWNLOAD_URL="http://www.kernel.org/pub/linux/kernel/v2.6/linux-2.6.32.8.tar.bz2"
 
-VFS_SOURCE=$PWD/vfs-full
-VFS_IMAGE=$PWD/vfs-full.gz
-KERNEL_SOURCE=$PWD/linux-$KERNEL_VERSION
-KERNEL_RELEASE=$KERNEL_VERSION-liveusb
+SRC_ROOT=`pwd`
+VFS_SOURCE=$SRC_ROOT/vfs-full
+TMP_BOOT_DIR=$SRC_ROOT/boot
+VFS_IMAGE=$TMP_BOOT_DIR/vfs-full.gz
+KERNEL_SOURCE=$SRC_ROOT/linux-$KERNEL_VERSION
 
 
 do_kernel_make()
 {
+	local __k_make_opts=""
+
+	# If building on a 64-bit system, specify the target arch
+	case "`uname -m`" in
+		i?86)
+			__k_make_opts=""
+			;;
+		x86_64)
+			__k_make_opts="ARCH=i386"
+			;;
+		*)
+			echo "*** Unrecognized arch type of current OS '`uname -m`'."
+			exit 1
+			;;
+	esac
+	
 	# Check if kernel source exists, if not download it
 	if [ ! -e $KERNEL_SOURCE ]; then
 		local __kernel_tar=`basename "$KERNEL_DOWNLOAD_URL"`
@@ -35,23 +53,32 @@ do_kernel_make()
 	if [ "config-$KERNEL_RELEASE" -nt "$KERNEL_SOURCE/.config" ]; then
 		cp -vf config-$KERNEL_RELEASE $KERNEL_SOURCE/.config
 	fi
-	make -C $KERNEL_SOURCE
-	cp -vf $KERNEL_SOURCE/.config config-$KERNEL_RELEASE
-	make install -C $KERNEL_SOURCE
-	make modules_install -C $KERNEL_SOURCE
-	depmod $KERNEL_RELEASE
 
+	# Compile the kernel and selected drivers using 8 threads
+	make -j8 -C $KERNEL_SOURCE $__k_make_opts
+	# .config may change during compiling, update the repository one
+	cp -vf $KERNEL_SOURCE/.config config-$KERNEL_RELEASE
+
+	# Install kernel image to "./boot" directory
+	mkdir -p boot
+	make install -C $KERNEL_SOURCE $__k_make_opts INSTALL_PATH=$TMP_BOOT_DIR
+	rm -vf $TMP_BOOT_DIR/{*.old,config-$KERNEL_RELEASE,System.map-$KERNEL_RELEASE}
+
+	# Install modules to "/lib/modules" of current system
+	make modules_install -C $KERNEL_SOURCE $__k_make_opts
+	##INSTALL_MOD_PATH=$VFS_SOURCE
+	depmod $KERNEL_RELEASE
+	##-b $VFS_SOURCE
 }
 
 do_vfs_make()
 {
-	local __vfs_mnt=$PWD/__d
-	local __vfs_loop=$PWD/__t
+	local __vfs_mnt=$SRC_ROOT/__d
+	local __vfs_loop=$SRC_ROOT/__t
 	
 	do_kernel_make
 	
-	mkdir -p boot
-	cp -af /boot/*-$KERNEL_RELEASE boot/
+	#cp -af /boot/*-$KERNEL_RELEASE boot/
 	mkdir -p $__vfs_mnt
 	dd if=/dev/zero of=$__vfs_loop bs=1M count=64
 	echo y | mkfs.ext2 -I128 -L vfs-full $__vfs_loop
@@ -109,7 +136,7 @@ do_install()
 	[ -z "$1" ] && { echo "*** No flash disk partition specified."; exit 1; }
 	
 	local __flash_dev="$1"
-	local __flash_mnt=$PWD/__u
+	local __flash_mnt=$SRC_ROOT/__u
 	
 	do_vfs_make
 	
