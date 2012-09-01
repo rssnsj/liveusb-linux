@@ -3,7 +3,7 @@
 PWD=`pwd`
 
 KERNEL_VERSION=2.6.32.8
-KERNEL_DOWNLOAD_URL="http://rssn.tk/Repository/sources/linux-2.6.32.8.tar.bz2"
+KERNEL_DOWNLOAD_URL="http://www.kernel.org/pub/linux/kernel/v2.6/linux-2.6.32.8.tar.bz2"
 
 VFS_SOURCE=$PWD/vfs-full
 VFS_IMAGE=$PWD/vfs-full.gz
