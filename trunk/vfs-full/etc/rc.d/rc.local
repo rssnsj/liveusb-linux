@@ -41,7 +41,17 @@ set_interface()
 
 		if [ ! -z "$if_name" -a ! -z "$if_addr" ]; then
 			echo "-- Setting '$if_name' address: $if_addr"
-			ifconfig $if_name $if_addr up
+			case "$if_addr" in
+				*/255.*)
+					local __addr=`echo "$if_addr" | awk -F/ '{print $1}'`
+					local __mask=`echo "$if_addr" | awk -F/ '{print $2}'`
+					ifconfig $if_name $__addr netmask $__mask up
+					;;
+				*)
+					ifconfig $if_name $if_addr up
+					;;
+			esac
+
 		fi
 		if [ ! -z "$if_gateway" ]; then
 			echo "-- Setting default gateway: $if_gateway"
