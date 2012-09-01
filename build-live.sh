@@ -35,6 +35,7 @@ do_kernel_make()
 	make -C $KERNEL_SOURCE
 	cp -vf $KERNEL_SOURCE/.config config-$KERNEL_RELEASE
 	make install -C $KERNEL_SOURCE
+	make modules_install -C $KERNEL_SOURCE
 	depmod $KERNEL_RELEASE
 
 }
