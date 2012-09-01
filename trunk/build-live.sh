@@ -103,15 +103,16 @@ do_install()
 	umount $__flash_mnt
 	rmdir $__flash_mnt
 
-	echo ">>> Note that you may probably need to add this option to '/boot/grub/menu.lst', and run 'grub-install' to the flash disk:"
-	cat <<EOF
-
-title       Linux - $KERNEL_RELEASE (ramdisk)
-root        (hd0,0)
-kernel      /boot/vmlinuz-$KERNEL_RELEASE root=/dev/ram0 rw
-initrd      /boot/vfs-full.gz
-
-EOF
+	echo
+	echo -ne "\033[32m"
+	echo -n ">>> You may probably need to add this option to '/boot/grub/menu.lst' of your flash disk, and run 'grub-install' to it:"
+	echo -e "\033[0m"
+	echo
+	echo "title       Linux - $KERNEL_RELEASE (ramdisk)"
+	echo "root        (hd0,0)"
+	echo "kernel      /boot/vmlinuz-$KERNEL_RELEASE root=/dev/ram0 rw"
+	echo "initrd      /boot/vfs-full.gz"
+	echo 
 
 }
 
@@ -140,3 +141,4 @@ case "$1" in
 		echo "  $0                    -- show this help"
 		;;
 esac
+
