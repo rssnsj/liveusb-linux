@@ -1,0 +1,295 @@
+#!/bin/bash
+# Network Interface Configuration System
+# Copyright (c) 1996-2005 Red Hat, Inc. all rights reserved.
+#
+# This software may be freely redistributed under the terms of the GNU
+# public license.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+. /etc/init.d/functions
+
+cd /etc/sysconfig/network-scripts
+. ./network-functions
+
+[ -f ../network ] && . ../network
+
+CONFIG=${1}
+
+need_config ${CONFIG}
+
+source_config
+
+# Old BOOTP variable
+if [ "${BOOTP}" = "yes" ]; then
+    BOOTPROTO=bootp
+fi
+
+if [ "${BOOTPROTO}" = "bootp" -o "${BOOTPROTO}" = "dhcp" ]; then
+    DYNCONFIG=true
+fi
+
+# load the module associated with that device
+# /sbin/modprobe ${REALDEVICE}
+is_available ${REALDEVICE}
+
+# remap, if the device is bound with a MAC address and not the right device num
+# bail out, if the MAC does not fit
+if [ -n "${HWADDR}" ]; then
+    FOUNDMACADDR=`get_hwaddr ${REALDEVICE}`
+    if [ "${FOUNDMACADDR}" != "${HWADDR}" ]; then
+        curdev=`get_device_by_hwaddr ${HWADDR}`
+        if [ -n "$curdev" ]; then
+	  rename_device "${REALDEVICE}" "${HWADDR}" "${curdev}" || {
+	    echo $"Device ${DEVICE} has different MAC address than expected, ignoring."
+	    exit 1
+	  }
+	fi
+    fi
+fi
+
+if [ "${TYPE}" = "Bridge" ]; then
+      if [ ! -x /usr/sbin/brctl ]; then
+	  echo $"Bridge support not available: brctl not found"
+	  exit 1
+      fi
+      if ! LC_ALL=C /usr/sbin/brctl show | LC_ALL=C grep -q "^${DEVICE}	"; then
+	  /usr/sbin/brctl addbr ${DEVICE} 2>/dev/null
+      fi
+      # brctl doesn't report success/failure (BZ #104408)
+      # Test for ourselves whether it worked.
+      if ! /usr/sbin/brctl show | LANG=C grep -q "^${DEVICE}	" ; then
+	    echo $"Bridge support not available in this kernel"
+	    exit 1
+      fi
+      [ -n "${DELAY}" ] && /usr/sbin/brctl setfd ${DEVICE} ${DELAY}
+      [ -n "${GCINT}" ] && /usr/sbin/brctl setgcint ${DEVICE} ${GCINT}
+      [ -n "${STP}" ] && /usr/sbin/brctl stp ${DEVICE} ${STP}
+fi
+
+# now check the real state
+is_available ${REALDEVICE} || {
+      if [ -n "$alias" ]; then
+         echo $"$alias device ${DEVICE} does not seem to be present, delaying initialization."
+      else
+         echo $"Device ${DEVICE} does not seem to be present, delaying initialization."
+      fi
+      exit 1
+}
+
+# is the device wireless? If so, configure wireless device specifics
+is_wireless_device ${DEVICE} && . ./ifup-wireless
+
+if [ -n "${BRIDGE}" -a -x /usr/sbin/brctl ]; then
+      if ! LC_ALL=C /usr/sbin/brctl show | LC_ALL=C grep -q "^${BRIDGE}	"; then
+	  /usr/sbin/brctl addbr ${BRIDGE} 2>/dev/null
+      fi
+      /sbin/ip addr flush dev ${DEVICE} 2>/dev/null
+      /sbin/ip link set dev ${DEVICE} up
+      [ -n "${LINKDELAY}" ] && /bin/sleep ${LINKDELAY}
+      /usr/sbin/brctl addif ${BRIDGE} ${DEVICE}
+      # Upon adding a device to a bridge, 
+      # it's necessary to make radvd reload its config
+      [ -r /var/run/radvd/radvd.pid ] && kill -HUP `cat /var/run/radvd/radvd.pid`
+      exit 0
+fi 
+
+# this isn't the same as the MAC in the configuration filename.  It is
+# available as a configuration option in the config file, forcing the kernel
+# to think an ethernet card has a different MAC address than it really has.
+if [ -n "${MACADDR}" ]; then
+   ip link set dev ${DEVICE} address ${MACADDR}
+fi
+
+# slave device?
+if [ "${SLAVE}" = yes -a "${ISALIAS}" = no -a "${MASTER}" != "" ]; then
+    /sbin/ip link set dev ${DEVICE} down
+    echo "+${DEVICE}" > /sys/class/net/${MASTER}/bonding/slaves 2>/dev/null
+
+    if [ -n "$ETHTOOL_OPTS" ] ; then
+        /sbin/ethtool -s ${REALDEVICE} $ETHTOOL_OPTS
+    fi
+
+    exit 0
+fi
+
+# Bonding initialization. For DHCP, we need to enslave the devices early,
+# so it can actually get an IP.
+if [ "$ISALIAS" = no ] && is_bonding_device ${DEVICE} ; then
+
+    /sbin/ip link set dev ${DEVICE} down
+
+    # add the bits to setup driver parameters here
+    for arg in $BONDING_OPTS ; do   
+        key=${arg%%=*};
+        value=${arg##*=};
+        echo $value > /sys/class/net/${DEVICE}/bonding/$key
+    done
+
+    /sbin/ip link set dev ${DEVICE} up
+    [ -n "${LINKDELAY}" ] && /bin/sleep ${LINKDELAY}
+    for device in `LANG=C grep -l "^[[:space:]]*MASTER=${DEVICE}" /etc/sysconfig/network-scripts/ifcfg-*` ; do
+	    is_ignored_file "$device" && continue
+	    /sbin/ifup ${device##*/}
+    done
+fi
+
+if [ -n "${MTU}" ]; then
+   ip link set dev ${DEVICE} mtu ${MTU}
+fi
+
+		     
+if [ -n "${DYNCONFIG}" -a -x /sbin/dhclient ]; then
+    # Remove any temporary references which were previously added to dhclient config
+    if [ -w /etc/dhclient-${DEVICE}.conf ] ; then
+        LC_ALL=C grep -v "# temporary RHL ifup addition" /etc/dhclient-${DEVICE}.conf > /etc/dhclient-${DEVICE}.conf.ifupnew 2> /dev/null
+        cat /etc/dhclient-${DEVICE}.conf.ifupnew > /etc/dhclient-${DEVICE}.conf
+        rm -f /etc/dhclient-${DEVICE}.conf.ifupnew
+    fi
+    if [[ "${PERSISTENT_DHCLIENT}" =  [yY1]* ]]; then
+       ONESHOT="";
+    else
+       ONESHOT="-1";
+    fi;
+    if [ -n "${DHCP_HOSTNAME}" ]; then
+       # Send a host-name to the DHCP server (requ. by some dhcp servers).
+       if [ -w /etc/dhclient-${DEVICE}.conf ] ; then
+           if ! LC_ALL=C grep "send *host-name *\"${DHCP_HOSTNAME}\"" /etc/dhclient-${DEVICE}.conf > /dev/null 2>&1 ; then
+               echo "send host-name \"${DHCP_HOSTNAME}\";  # temporary RHL ifup addition" >> /etc/dhclient-${DEVICE}.conf
+           fi
+       elif ! [ -e /etc/dhclient-${DEVICE}.conf ] ; then
+           echo "send host-name \"${DHCP_HOSTNAME}\";  # temporary RHL ifup addition" >> /etc/dhclient-${DEVICE}.conf
+       fi
+    fi
+    # allow users to use generic '/etc/dhclient.conf' (as documented in manpage!) 
+    # if per-device file doesn't exist or is empty
+    if [ -s /etc/dhclient-${DEVICE}.conf ]; then
+       DHCLIENTCONF="-cf /etc/dhclient-${DEVICE}.conf";
+    else
+       DHCLIENTCONF='';
+    fi;
+    # copy any lease obtained by the initrd
+    if [ -f /dev/.dhclient-${DEVICE}.leases ] ; then
+    	mv -f /dev/.dhclient-${DEVICE}.leases /var/lib/dhclient/dhclient-${DEVICE}.leases
+	[ -x /sbin/restorecon ] && restorecon /var/lib/dhclient/dhclient-${DEVICE}.leases > /dev/null 2>&1
+    fi
+    DHCLIENTARGS="${DHCLIENTARGS} ${ONESHOT} -q ${DHCLIENTCONF} -lf /var/lib/dhclient/dhclient-${DEVICE}.leases -pf /var/run/dhclient-${DEVICE}.pid"
+    echo
+    echo -n $"Determining IP information for ${DEVICE}..."
+    if check_link_down ${DEVICE}; then
+	echo $" failed; no link present.  Check cable?"
+	ip link set dev ${DEVICE} down >/dev/null 2>&1
+	exit 1
+    fi
+
+    if [ -n "$ETHTOOL_OPTS" ] ; then
+        /sbin/ethtool -s ${REALDEVICE} $ETHTOOL_OPTS
+    fi
+
+    if /sbin/dhclient ${DHCLIENTARGS} ${DEVICE} ; then
+	echo $" done."
+    else
+	echo $" failed."
+	exit 1
+    fi
+# end dynamic device configuration
+else 
+    if [ -z "${IPADDR}" ]; then
+         # enable device without IP, useful for e.g. PPPoE
+	 ip link set dev ${REALDEVICE} up
+	 if [ -n "$ETHTOOL_OPTS" ] ; then
+	 	/sbin/ethtool -s ${REALDEVICE} $ETHTOOL_OPTS
+	 fi
+	 [ -n "${LINKDELAY}" ] && /bin/sleep ${LINKDELAY}
+
+	 if [ "${NETWORKING_IPV6}" = "yes" ]; then
+	    /etc/sysconfig/network-scripts/ifup-ipv6 ${CONFIG}
+	 fi
+	 exec /etc/sysconfig/network-scripts/ifup-post ${CONFIG} ${2}
+    fi
+  
+    expand_config
+    
+    [ -n "${ARP}" ] && \
+	ip link set dev ${REALDEVICE} $(toggle_value arp $ARP)
+   
+    if ! ip link set dev ${REALDEVICE} up ; then
+	echo $"Failed to bring up ${DEVICE}."
+	exit 1
+    fi
+
+    if [ -n "$ETHTOOL_OPTS" ] ; then
+        /sbin/ethtool -s ${REALDEVICE} $ETHTOOL_OPTS
+    fi
+
+    [ -n "${LINKDELAY}" ] && /bin/sleep ${LINKDELAY}
+
+    if [ "${DEVICE}" = "lo" ]; then
+    	SCOPE="scope host"
+    else
+        SCOPE=${SCOPE:-}
+    fi
+    
+    if [ -n "$SRCADDR" ]; then
+       SRC="src $SRCADDR"
+    else
+       SRC=
+    fi
+    
+    if ! LC_ALL=C ip addr ls ${REALDEVICE} | LC_ALL=C grep -q "${IPADDR}/${PREFIX}" ; then
+	 if ! arping -q -c 2 -w 3 -D -I ${REALDEVICE} ${IPADDR} ; then
+	    echo $"Error, some other host already uses address ${IPADDR}."
+	    exit 1
+	 fi
+	 if ! ip addr add ${IPADDR}/${PREFIX} \
+	    brd ${BROADCAST:-+} dev ${REALDEVICE} ${SCOPE} label ${DEVICE}; then
+	    echo $"Error adding address ${IPADDR} for ${DEVICE}."
+	 fi
+    fi
+    
+    if [ -n "$SRCADDR" ]; then
+           sysctl -w "net.ipv4.conf.${REALDEVICE}.arp_filter=1" >/dev/null 2>&1
+    fi
+
+    # update ARP cache of neighboring computers
+    arping -q -A -c 1 -I ${REALDEVICE} ${IPADDR}
+    ( sleep 2;
+      arping -q -U -c 1 -I ${REALDEVICE} ${IPADDR} ) > /dev/null 2>&1 < /dev/null &
+
+    # Set a default route.
+    if [ -z "${GATEWAYDEV}" -o "${GATEWAYDEV}" = "${REALDEVICE}" ]; then
+	# set up default gateway. replace if one already exists
+	if [ -n "${GATEWAY}" -a "`ipcalc --network ${GATEWAY} ${NETMASK} 2>/dev/null`" = "NETWORK=${NETWORK}" ]; then
+	    ip route replace default ${METRIC:+metric $METRIC} \
+		via ${GATEWAY} ${WINDOW:+window $WINDOW} ${SRC} \
+		${GATEWAYDEV:+dev $GATEWAYDEV}
+	elif [ "${GATEWAYDEV}" = "${DEVICE}" ]; then
+	    ip route replace default ${METRIC:+metric $METRIC} \
+		${SRC} ${WINDOW:+window $WINDOW} dev ${REALDEVICE}
+	fi
+    fi
+fi
+
+# Add Zeroconf route.
+if [ -z "${NOZEROCONF}" -a "${ISALIAS}" = "no" -a "${REALDEVICE}" != "lo" ]; then
+    ip route replace 169.254.0.0/16 dev ${REALDEVICE} 
+fi
+
+# IPv6 initialisation?
+if [ "${NETWORKING_IPV6}" = "yes" ]; then
+    /etc/sysconfig/network-scripts/ifup-ipv6 ${CONFIG}
+    if [[ "${DHCPV6C}"  = [Yy1]* ]] && [ -x /sbin/dhcp6c ]; then
+	/sbin/dhcp6c ${DEVICE};
+        dhcp6_pid=(`/bin/ps -eo 'pid,args' | /bin/grep "dhcp6c ${DEVICE}" | egrep -v grep`);
+	echo ${dhcp6_pid[0]} > /var/run/dhcp6c_${DEVICE}.pid
+    fi;
+fi
+
+if [ "${IPX}" = yes ]; then
+       /etc/sysconfig/network-scripts/ifup-ipx ${DEVICE}
+fi
+
+exec /etc/sysconfig/network-scripts/ifup-post ${CONFIG} ${2}
+

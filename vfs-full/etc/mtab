@@ -1,0 +1,5 @@
+none / ext2 rw 0 0
+proc /proc proc rw 0 0
+sysfs /sys sysfs rw 0 0
+/tmp /tmp tmpfs rw 0 0
+/dev/hda1 /media/vfs-full ext2 rw 0 0

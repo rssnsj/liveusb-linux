@@ -1,0 +1,7 @@
+#!/bin/sh
+if [ -f /dev/.modprobe_debug ]; then
+	/sbin/modprobe -v -s $@ &>/dev/console
+else
+	/sbin/modprobe $@
+fi
+
