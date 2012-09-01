@@ -1,0 +1,7 @@
+# Advanced Micro Devices [AMD] 79c970 [PCnet32 LANCE]
+DEVICE=eth1
+BOOTPROTO=static
+ONBOOT=no
+IPADDR=10.0.2.1
+NETMASK=255.255.255.0
+

@@ -1,0 +1,153 @@
+#!/bin/bash
+# Network Interface Configuration System
+# Copyright (c) 1996-2001 Red Hat, Inc. all rights reserved.
+#
+# This software may be freely redistributed under the terms of the GNU
+# public license.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+
+unset WINDOW # defined by screen, conflicts with our usage
+
+. /etc/init.d/functions
+
+cd /etc/sysconfig/network-scripts
+. ./network-functions
+
+[ -f ../network ] && . ../network
+
+CONFIG=${1}
+
+[ -z "${CONFIG}" ] && {
+    echo $"Usage: ifup <device name>" >&2
+    exit 1
+}
+
+need_config ${CONFIG}
+
+[ -f "${CONFIG}" ] || {
+    echo $"$0: configuration for ${1} not found." >&2
+    echo $"Usage: ifup <device name>" >&2
+    exit 1
+}
+
+if [ ${UID} != 0 ]; then
+    if [ -x /usr/sbin/usernetctl ]; then
+	source_config
+	if /usr/sbin/usernetctl ${CONFIG} report ; then
+	    exec /usr/sbin/usernetctl ${CONFIG} up
+	fi
+    fi
+    echo $"Users cannot control this device." >&2
+    exit 1
+fi
+
+source_config
+
+if [ "foo$2" = "fooboot" ] && [ "${ONBOOT}" = "no" -o "${ONBOOT}" = "NO" ]
+then
+    exit 0
+fi
+if [ -n "$IN_HOTPLUG" ] && [ "${HOTPLUG}" = "no" -o "${HOTPLUG}" = "NO" ]
+then
+    exit 0
+fi
+if [ -n "$IN_HOTPLUG" -a "${TYPE}" = "Bridge" ]; 
+then
+    exit 0
+fi
+
+# Ethernet 802.1Q VLAN support
+if [ -x /sbin/vconfig -a "${VLAN}" = "yes" -a "$ISALIAS" = "no" ]; then
+    VID=""
+    if [[ "${DEVICE}" =~ '^(eth|bond)[0-9]+\.[0-9]{1,4}$' ]]; then
+	VID=$(echo "${DEVICE}" | LC_ALL=C sed 's/^[a-z0-9]*\.0*//')
+	PHYSDEV=${DEVICE%.*}
+    fi
+    if [[ "${DEVICE}" =~ '^vlan[0-9]{1,4}?' ]]; then
+	VID=$(echo "${DEVICE}" | LC_ALL=C sed 's/^vlan0*//')
+	# PHYSDEV should be set in ifcfg-vlan* file
+	if test -z "$PHYSDEV"; then
+		echo $"PHYSDEV should be set for device ${DEVICE}"
+		exit 1
+	fi
+    fi
+    if [ -n "$VID" ]; then
+	if [ ! -d /proc/net/vlan ]; then
+            if modprobe 8021q >/dev/null 2>&1 ; then
+		test -z "$VLAN_NAME_TYPE" && VLAN_NAME_TYPE=DEV_PLUS_VID_NO_PAD
+		/sbin/vconfig set_name_type "$VLAN_NAME_TYPE" >/dev/null 2>&1 || {
+		    echo $"Could not set 802.1Q VLAN parameters."
+		}
+	    else
+		echo $"No 802.1Q VLAN support available in kernel for device ${DEVICE}"
+		exit 1
+	    fi
+	fi
+
+	is_available ${PHYSDEV} || {
+	    if [ "$?" = "1" ] ; then
+		echo $"$alias device ${DEVICE} does not seem to be present, delaying initialization."
+		exit 1
+	    else
+		exit 0
+	    fi
+	}
+
+	# Link on Physical device needs to be up but no ip required
+	check_device_down ${PHYSDEV} && {
+	    ip -o link set dev ${PHYSDEV} up
+	}
+
+	if [ ! -f /proc/net/vlan/${DEVICE} ]; then
+	    /sbin/vconfig add ${PHYSDEV} ${VID} || {
+		(logger -p daemon.info -t ifup \
+		    $"ERROR: could not add vlan ${VID} as ${DEVICE} on dev ${PHYSDEV}" &)&
+		echo $"ERROR: could not add vlan ${VID} as ${DEVICE} on dev ${PHYSDEV}"
+		exit 1
+	    }
+	fi
+
+	if [ -f /proc/net/vlan/${DEVICE} ]; then
+	    case "$REORDER_HDR" in
+		yes|1)
+		    /sbin/vconfig set_flag ${DEVICE} 1 1 || {
+			(logger -p daemon.info -t ifup \
+			    "WARNING: vconfig not able to enable REORDER_HDR on ${DEVICE}" &)&
+		    }
+		    ;;
+		no|0)
+		    /sbin/vconfig set_flag ${DEVICE} 1 0 || {
+			(logger -p daemon.info -t ifup \
+			    $"WARNING: vconfig not able to disable REORDER_HDR on ${DEVICE}" &)&
+		    }
+		    ;;
+	    esac
+	fi
+    fi
+fi
+
+# Old BOOTP variable
+if [ "${BOOTP}" = "yes" ]; then
+    BOOTPROTO=bootp
+fi
+
+if [ "${BOOTPROTO}" = "bootp" -o "${BOOTPROTO}" = "dhcp" ]; then
+    DYNCONFIG=true
+fi
+
+if [ -x /sbin/ifup-pre-local ]; then
+    /sbin/ifup-pre-local ${CONFIG} $2
+fi
+
+OTHERSCRIPT="/etc/sysconfig/network-scripts/ifup-${DEVICETYPE}"
+
+if [ ! -x ${OTHERSCRIPT} ]; then
+    OTHERSCRIPT="/etc/sysconfig/network-scripts/ifup-eth"
+fi
+
+exec ${OTHERSCRIPT} ${CONFIG} $2
+
+

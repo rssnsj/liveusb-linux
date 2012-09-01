@@ -1,0 +1,18 @@
+# These device have to be created manually
+loop0
+loop1
+loop2
+loop3
+loop4
+loop5
+loop6
+loop7
+parport0
+parport1
+parport2
+parport3
+net/tun 
+ppp 
+console 
+null 
+zero
