@@ -83,6 +83,17 @@ do_vfs_make()
 		cd $__vfs_mnt/etc/ssh
 		chmod 600 *_key
 	)
+
+	# Replace Intel NIC drivers with the newly compiled
+	local __driver_dir=""
+	for __driver_dir in e1000-* e1000e-* igb-* ixgbe-*; do
+		[ -d "$__driver_dir" ] || continue
+		(
+			cd $__driver_dir/src
+			make BUILD_KERNEL=$KERNEL_RELEASE install
+		)
+	done
+
 	cp -auvf /lib/modules/$KERNEL_RELEASE $__vfs_mnt/lib/modules/
 	umount $__vfs_mnt
 	rmdir $__vfs_mnt
