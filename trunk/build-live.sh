@@ -12,25 +12,26 @@ TMP_BOOT_DIR=$SRC_ROOT/boot
 VFS_IMAGE=$TMP_BOOT_DIR/vfs-full.gz
 KERNEL_SOURCE=$SRC_ROOT/linux-$KERNEL_VERSION
 
+# If building on a 64-bit system, specify the target arch
+case "`uname -m`" in
+	i?86)
+		__k_make_opts=""
+		;;
+	x86_64)
+		__k_make_opts="ARCH=i386"
+		;;
+	*)
+		echo "*** Unrecognized arch type of current OS '`uname -m`'."
+		exit 1
+		;;
+esac
+	
 
 do_kernel_make()
 {
+	# "ARCH=xxx" attached to "make" while compiling kernel or module
 	local __k_make_opts=""
 
-	# If building on a 64-bit system, specify the target arch
-	case "`uname -m`" in
-		i?86)
-			__k_make_opts=""
-			;;
-		x86_64)
-			__k_make_opts="ARCH=i386"
-			;;
-		*)
-			echo "*** Unrecognized arch type of current OS '`uname -m`'."
-			exit 1
-			;;
-	esac
-	
 	# Check if kernel source exists, if not download it
 	if [ ! -e $KERNEL_SOURCE ]; then
 		local __kernel_tar=`basename "$KERNEL_DOWNLOAD_URL"`
@@ -65,10 +66,23 @@ do_kernel_make()
 	rm -vf $TMP_BOOT_DIR/{*.old,config-$KERNEL_RELEASE,System.map-$KERNEL_RELEASE}
 
 	# Install modules to "/lib/modules" of current system
-	make modules_install -C $KERNEL_SOURCE $__k_make_opts
-	##INSTALL_MOD_PATH=$VFS_SOURCE
-	depmod $KERNEL_RELEASE
-	##-b $VFS_SOURCE
+	make modules_install -C $KERNEL_SOURCE $__k_make_opts INSTALL_MOD_PATH=$VFS_SOURCE
+
+	# Replace Intel NIC drivers with the newly compiled
+	local __driver_dir=""
+	for __driver_dir in e1000-* e1000e-* igb-* ixgbe-*; do
+		[ -d "$__driver_dir" ] || continue
+		(
+			local __d_name=`echo "$__driver_dir" | awk -F- '{print $1}'`
+			local __d_dir=$VFS_SOURCE/lib/modules/$KERNEL_RELEASE/kernel/drivers/net/$__d_name
+			cd $__driver_dir/src
+			make KSRC=$KERNEL_SOURCE $__k_make_opts
+			[ ! -e "$__d_dir" ] && mkdir $__d_dir
+			cp -vf $__d_name.ko $__d_dir/
+		)
+	done
+	# Regenerate module dependencies after updated drivers
+	depmod -av $KERNEL_RELEASE -b $VFS_SOURCE
 }
 
 do_vfs_make()
@@ -114,17 +128,7 @@ do_vfs_make()
 		chmod 600 *_key
 	)
 
-	# Replace Intel NIC drivers with the newly compiled
-	local __driver_dir=""
-	for __driver_dir in e1000-* e1000e-* igb-* ixgbe-*; do
-		[ -d "$__driver_dir" ] || continue
-		(
-			cd $__driver_dir/src
-			make BUILD_KERNEL=$KERNEL_RELEASE install
-		)
-	done
-
-	cp -auvf /lib/modules/$KERNEL_RELEASE $__vfs_mnt/lib/modules/
+	#cp -auvf /lib/modules/$KERNEL_RELEASE $__vfs_mnt/lib/modules/
 	umount $__vfs_mnt
 	rmdir $__vfs_mnt
 	gzip -c $__vfs_loop > $VFS_IMAGE
