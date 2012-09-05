@@ -12,26 +12,25 @@ TMP_BOOT_DIR=$SRC_ROOT/boot
 VFS_IMAGE=$TMP_BOOT_DIR/vfs-full.gz
 KERNEL_SOURCE=$SRC_ROOT/linux-$KERNEL_VERSION
 
-# If building on a 64-bit system, specify the target arch
-case "`uname -m`" in
-	i?86)
-		__k_make_opts=""
-		;;
-	x86_64)
-		__k_make_opts="ARCH=i386"
-		;;
-	*)
-		echo "*** Unrecognized arch type of current OS '`uname -m`'."
-		exit 1
-		;;
-esac
-	
-
 do_kernel_make()
 {
 	# "ARCH=xxx" attached to "make" while compiling kernel or module
 	local __k_make_opts=""
 
+	# If building on a 64-bit system, specify the target arch
+	case "`uname -m`" in
+		i?86)
+			__k_make_opts=""
+			;;
+		x86_64)
+			__k_make_opts="ARCH=i386"
+			;;
+		*)
+			echo "*** Unrecognized arch type of current OS '`uname -m`'."
+			exit 1
+			;;
+	esac
+	
 	# Check if kernel source exists, if not download it
 	if [ ! -e $KERNEL_SOURCE ]; then
 		local __kernel_tar=`basename "$KERNEL_DOWNLOAD_URL"`
