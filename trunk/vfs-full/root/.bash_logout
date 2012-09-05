@@ -1,3 +1,3 @@
 # ~/.bash_logout
 
-clear
+#clear
