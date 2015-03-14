@@ -1,2 +1,2 @@
 # liveusb-linux
-Tiny Linux Operating System for System Repair and Rescue Uses
+Ramdisk-based Linux Operating System for System Repair and Rescue Uses
