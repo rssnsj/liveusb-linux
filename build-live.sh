@@ -18,18 +18,18 @@ do_kernel_make()
 	local __k_make_opts=""
 
 	# If building on a 64-bit system, specify the target arch
-	case "`uname -m`" in
-		i?86)
-			__k_make_opts=""
-			;;
-		x86_64)
-			__k_make_opts="ARCH=i386"
-			;;
-		*)
-			echo "*** Unrecognized arch type of current OS '`uname -m`'."
-			exit 1
-			;;
-	esac
+	#case "`uname -m`" in
+	#	i?86)
+	#		__k_make_opts=""
+	#		;;
+	#	x86_64)
+	#		__k_make_opts="ARCH=i386"
+	#		;;
+	#	*)
+	#		echo "*** Unrecognized arch type of current OS '`uname -m`'."
+	#		exit 1
+	#		;;
+	#esac
 	
 	# Check if kernel source exists, if not download it
 	if [ ! -e $KERNEL_SOURCE ]; then
@@ -48,16 +48,26 @@ do_kernel_make()
 				;;
 		esac
 	fi
-	
-	# If the repository config file is newer, just use it
-	if [ "config-$KERNEL_RELEASE" -nt "$KERNEL_SOURCE/.config" ]; then
-		cp -vf config-$KERNEL_RELEASE $KERNEL_SOURCE/.config
+
+	# Check symlink: config -> config-x.x.x-xxx
+	if ! [ -L config ]; then
+		echo "*** Please create symbolic link 'config' to either of the config files."
+		exit 1
 	fi
 
+	# If the repository config file is newer, just use it
+	cat config > $KERNEL_SOURCE/.config
+
+	local i
+	for i in 5 4 3 2 1; do
+		echo "Waiting ${i}s to build ..."
+		sleep 1
+	done
+
 	# Compile the kernel and selected drivers using 8 threads
-	make -j8 -C $KERNEL_SOURCE $__k_make_opts
+	make -j4 -C $KERNEL_SOURCE $__k_make_opts
 	# .config may change during compiling, update the repository one
-	cp -vf $KERNEL_SOURCE/.config config-$KERNEL_RELEASE
+	### cat $KERNEL_SOURCE/.config > config
 
 	# Install kernel image to "./boot" directory
 	mkdir -p boot
@@ -81,7 +91,7 @@ do_kernel_make()
 		)
 	done
 	# Regenerate module dependencies after updated drivers
-	depmod -av $KERNEL_RELEASE -b $VFS_SOURCE
+	chroot $VFS_SOURCE depmod -av $KERNEL_RELEASE
 }
 
 do_vfs_make()
@@ -99,9 +109,12 @@ do_vfs_make()
 	(
 		cd $VFS_SOURCE
 		tar -c --exclude=.svn * | tar -xv -C $__vfs_mnt
-		
-		# Build /dev directory
-		mkdir -p $__vfs_mnt/dev
+
+		# Rebuild the empty directories
+		cd $__vfs_mnt
+		mkdir -p dev sys proc tmp var/run media
+
+		# Build /dev sub-directories
 		cd $__vfs_mnt/dev
 		mknod ram0 b 1 0
 		mknod ram1 b 1 1
@@ -121,7 +134,7 @@ do_vfs_make()
 		mknod urandom c 1 9
 		mknod zero c 1 5
 		mkdir -p pts shm
-		
+
 		# Fix /etc/ssh permissions
 		cd $__vfs_mnt/etc/ssh
 		chmod 600 *_key
@@ -137,36 +150,45 @@ do_vfs_make()
 do_install()
 {
 	[ -z "$1" ] && { echo "*** No flash disk partition specified."; exit 1; }
-	
+
 	local __flash_dev="$1"
-	local __flash_mnt=$SRC_ROOT/__u
-	
+	local __flash_mnt=$SRC_ROOT/__disk__
+
 	do_vfs_make
-	
+
+	local i
+	for i in 5 4 3 2 1; do
+		echo "Waiting ${i}s to install to $__flash_dev ..."
+		sleep 1
+	done
+
 	mkdir -p $__flash_mnt
 	mount $__flash_dev $__flash_mnt
 	[ ! -e $__flash_mnt/boot ] && mkdir $__flash_mnt/boot
-	cp -af /boot/*-$KERNEL_RELEASE $VFS_IMAGE $__flash_mnt/boot/
+	cp -af boot/vmlinuz-$KERNEL_RELEASE $VFS_IMAGE $__flash_mnt/boot/
 	umount $__flash_mnt
 	rmdir $__flash_mnt
 
 	echo
 	echo -ne "\033[32m"
-	echo -n ">>> You may probably need to add this option to '/boot/grub/menu.lst' of your flash disk, and run 'grub-install' to it:"
+	echo -n ">>> You may have to add these options to '/boot/grub/menu.lst' of your flash disk, and run 'grub-install' to it:"
 	echo -e "\033[0m"
 	echo
 	echo "title       Linux - $KERNEL_RELEASE (ramdisk)"
 	echo "root        (hd0,0)"
 	echo "kernel      /boot/vmlinuz-$KERNEL_RELEASE root=/dev/ram0 rw"
 	echo "initrd      /boot/vfs-full.gz"
-	echo 
-
+	echo
 }
 
 do_clean()
 {
 	rm -rf boot
 	rm -f $VFS_IMAGE
+
+	cd $VFS_SOURCE
+	rm -rf lib/firmware
+	rm -rf lib/modules
 }
 
 case "$1" in
