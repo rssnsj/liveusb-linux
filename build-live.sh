@@ -138,7 +138,7 @@ do_vfs_make()
 	mount $__vfs_img $__vfs_mnt -o loop
 	(
 		cd $VFS_SOURCE
-		tar -c --exclude=.svn * | tar -xv -C $__vfs_mnt
+		tar -c --exclude-vcs * | tar -x -C $__vfs_mnt
 
 		# Rebuild the empty directories
 		cd $__vfs_mnt
@@ -179,13 +179,19 @@ do_vfs_make()
 
 do_install()
 {
-	[ -z "$1" ] && { echo "*** No target disk partition."; exit 1; }
+	if [ -z "$1" ]; then
+		echo "*** Requiring target disk partition."
+		exit 1
+	fi
 
 	local disk_dev="$1"
 	local disk_mnt_rel=__disk__
 	local disk_mnt=$VFS_SOURCE/$disk_mnt_rel
 
-	do_vfs_make
+	if ! [ -f $BOOT_BUILD_DIR/vmlinuz-$KERNEL_RELEASE -a -f $BOOT_BUILD_DIR/vfs-full.gz ]; then
+		echo "*** Missing kernel or ramdisk images. Perform the 'create' operation before 'install'."
+		exit 1
+	fi
 
 	local i
 	for i in 5 4 3 2 1; do
