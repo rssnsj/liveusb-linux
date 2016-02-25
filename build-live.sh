@@ -1,16 +1,43 @@
-#!/bin/sh -e
+#!/bin/bash -e
 
 cd `dirname $0`
 
-KERNEL_VERSION=2.6.32.8
+KERNEL_VERSION=4.1.18
 KERNEL_RELEASE=$KERNEL_VERSION-liveusb
-KERNEL_DOWNLOAD_URL="http://www.kernel.org/pub/linux/kernel/v2.6/linux-2.6.32.8.tar.bz2"
+KERNEL_DOWNLOAD_URL="https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.1.18.tar.gz"
 
 SRC_ROOT=`pwd`
 VFS_SOURCE=$SRC_ROOT/vfs-full
-TMP_BOOT_DIR=$SRC_ROOT/boot
-VFS_IMAGE=$TMP_BOOT_DIR/vfs-full.gz
+BOOT_BUILD_DIR=$SRC_ROOT/boot
 KERNEL_SOURCE=$SRC_ROOT/linux-$KERNEL_VERSION
+
+chroot_real()
+{
+	local dir="$1"
+	shift 1
+	(
+		cd $dir || exit 1
+		if [ ! -d proc/net ]; then
+			mkdir -p dev sys proc tmp
+			mount --bind /proc proc
+			mount --bind /dev dev
+			#mount devpts2 dev/pts -t devpts
+			#mount tmpfs2 dev/shm -t tmpfs
+			mount --bind /sys sys
+		fi
+		exec chroot . "$@"
+	)
+}
+
+clean_chroot()
+{
+	local dir="$1"
+	(
+		cd $dir || exit 1
+		umount dev/pts dev/shm 2>/dev/null || :
+		umount sys dev proc || :
+	)
+}
 
 do_kernel_make()
 {
@@ -70,9 +97,9 @@ do_kernel_make()
 	### cat $KERNEL_SOURCE/.config > config
 
 	# Install kernel image to "./boot" directory
-	mkdir -p boot
-	make install -C $KERNEL_SOURCE $__k_make_opts INSTALL_PATH=$TMP_BOOT_DIR
-	rm -vf $TMP_BOOT_DIR/{*.old,config-$KERNEL_RELEASE,System.map-$KERNEL_RELEASE}
+	mkdir -p $BOOT_BUILD_DIR
+	make install -C $KERNEL_SOURCE $__k_make_opts INSTALL_PATH=$BOOT_BUILD_DIR
+	rm -vf $BOOT_BUILD_DIR/{*.old,config-$KERNEL_RELEASE,System.map-$KERNEL_RELEASE}
 
 	# Install modules to "/lib/modules" of current system
 	make modules_install -C $KERNEL_SOURCE $__k_make_opts INSTALL_MOD_PATH=$VFS_SOURCE
@@ -87,25 +114,28 @@ do_kernel_make()
 			cd $__driver_dir/src
 			make KSRC=$KERNEL_SOURCE $__k_make_opts
 			[ ! -e "$__d_dir" ] && mkdir $__d_dir
-			cp -vf $__d_name.ko $__d_dir/
+			cp $__d_name.ko $__d_dir/
 		)
 	done
+
 	# Regenerate module dependencies after updated drivers
-	chroot $VFS_SOURCE depmod -av $KERNEL_RELEASE
+	chroot_real $VFS_SOURCE depmod -a $KERNEL_RELEASE
+	sleep 1
+	clean_chroot $VFS_SOURCE
 }
 
 do_vfs_make()
 {
-	local __vfs_mnt=$SRC_ROOT/__d
-	local __vfs_loop=$SRC_ROOT/__t
+	local __vfs_img=$SRC_ROOT/__vfs_img__
+	local __vfs_mnt=$SRC_ROOT/__vfs_mnt__
 	
 	do_kernel_make
 	
-	#cp -af /boot/*-$KERNEL_RELEASE boot/
+	#cp /boot/*-$KERNEL_RELEASE boot/
+	dd if=/dev/zero of=$__vfs_img bs=1M count=64
+	echo y | mkfs.ext2 -I128 $__vfs_img
 	mkdir -p $__vfs_mnt
-	dd if=/dev/zero of=$__vfs_loop bs=1M count=64
-	echo y | mkfs.ext2 -I128 -L vfs-full $__vfs_loop
-	mount $__vfs_loop $__vfs_mnt -o loop
+	mount $__vfs_img $__vfs_mnt -o loop
 	(
 		cd $VFS_SOURCE
 		tar -c --exclude=.svn * | tar -xv -C $__vfs_mnt
@@ -140,51 +170,65 @@ do_vfs_make()
 		chmod 600 *_key
 	)
 
-	#cp -auvf /lib/modules/$KERNEL_RELEASE $__vfs_mnt/lib/modules/
+	#cp -a /lib/modules/$KERNEL_RELEASE $__vfs_mnt/lib/modules/
 	umount $__vfs_mnt
 	rmdir $__vfs_mnt
-	gzip -c $__vfs_loop > $VFS_IMAGE
-	rm -f $__vfs_loop
+	gzip -c $__vfs_img > $BOOT_BUILD_DIR/vfs-full.gz
+	rm -f $__vfs_img
 }
 
 do_install()
 {
 	[ -z "$1" ] && { echo "*** No target disk partition."; exit 1; }
 
-	local __flash_dev="$1"
-	local __flash_mnt=$SRC_ROOT/__disk__
+	local disk_dev="$1"
+	local disk_mnt_rel=__disk__
+	local disk_mnt=$VFS_SOURCE/$disk_mnt_rel
 
 	do_vfs_make
 
 	local i
 	for i in 5 4 3 2 1; do
-		echo "Waiting ${i}s to install to $__flash_dev ..."
+		echo "Waiting ${i}s to install to $disk_dev ..."
 		sleep 1
 	done
 
-	mkdir -p $__flash_mnt
-	mount $__flash_dev $__flash_mnt
-	[ ! -e $__flash_mnt/boot ] && mkdir $__flash_mnt/boot
-	cp -af boot/vmlinuz-$KERNEL_RELEASE $VFS_IMAGE $__flash_mnt/boot/
-	umount $__flash_mnt
-	rmdir $__flash_mnt
+	mkdir -p $disk_mnt
+	mount $disk_dev $disk_mnt
+	mkdir -p $disk_mnt/boot
+	cp -v $BOOT_BUILD_DIR/vmlinuz-$KERNEL_RELEASE $BOOT_BUILD_DIR/vfs-full.gz $disk_mnt/boot/
+
+	# Install GRUB
+	#chroot_real $VFS_SOURCE grub-install `echo $disk_dev | sed 's/[0-9]\+$//'` --root-directory=/$disk_mnt_rel
+	#sleep 1
+	#clean_chroot $VFS_SOURCE
+
+	umount $disk_mnt
+	rmdir $disk_mnt
 
 	echo
 	echo -ne "\033[32m"
 	echo -n ">>> You may have to add these options to '/boot/grub/menu.lst' of your flash disk, and run 'grub-install' to it:"
 	echo -e "\033[0m"
-	echo
-	echo "title       Linux - $KERNEL_RELEASE (ramdisk)"
-	echo "root        (hd0,0)"
-	echo "kernel      /boot/vmlinuz-$KERNEL_RELEASE root=/dev/ram0 rw"
-	echo "initrd      /boot/vfs-full.gz"
-	echo
+	cat <<EOF
+
+default 0
+timeout 2
+
+#color  cyan/blue white/blue
+
+title   Linux - $KERNEL_RELEASE (ramdisk)
+root    (hd0,0)
+kernel  /boot/vmlinuz-$KERNEL_RELEASE root=/dev/ram0 rw
+initrd  /boot/vfs-full.gz
+
+EOF
 }
 
 do_clean()
 {
-	rm -rf boot
-	rm -f $VFS_IMAGE
+	rm -rf $BOOT_BUILD_DIR
+	rm -f $BOOT_BUILD_DIR/vfs-full.gz
 
 	( cd $VFS_SOURCE; rm -rf lib/firmware lib/modules )
 
@@ -213,12 +257,12 @@ case "$1" in
 		do_install $2
 		;;
 	*)
-		echo "Build images for a LiveUSB linux."
+		echo "Bootable LiveUSB Linux creator."
 		echo "Usage:"
-		echo "  $0 create             -- create kernel and filesystem images"
-		echo "  $0 clean              -- clean temporary and target files"
-		echo "  $0 install /dev/sdxn  -- synchronize to your flash disk"
-		echo "  $0                    -- show this help"
+		echo "  $0 create                build kernel image and rootfs ramdisk"
+		echo "  $0 install /dev/sdxn     write to your flash disk"
+		echo "  $0 clean                 clean up workspace"
+		echo "  $0                       show help"
 		;;
 esac
 
