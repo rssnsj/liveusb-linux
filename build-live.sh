@@ -149,7 +149,7 @@ do_vfs_make()
 
 do_install()
 {
-	[ -z "$1" ] && { echo "*** No flash disk partition specified."; exit 1; }
+	[ -z "$1" ] && { echo "*** No target disk partition."; exit 1; }
 
 	local __flash_dev="$1"
 	local __flash_mnt=$SRC_ROOT/__disk__
@@ -186,9 +186,20 @@ do_clean()
 	rm -rf boot
 	rm -f $VFS_IMAGE
 
-	cd $VFS_SOURCE
-	rm -rf lib/firmware
-	rm -rf lib/modules
+	( cd $VFS_SOURCE; rm -rf lib/firmware lib/modules )
+
+	if [ -d $KERNEL_SOURCE ]; then
+		echo -n "Delete kernel source directory '$KERNEL_SOURCE' [y/N]? "
+		local cf
+		read cf
+		if [ "$cf" = y -o "$cf" = Y ]; then
+			echo "Deleting $KERNEL_SOURCE ..."
+			rm -rf $KERNEL_SOURCE
+			echo "Done."
+		else
+			echo "Given up."
+		fi
+	fi
 }
 
 case "$1" in
