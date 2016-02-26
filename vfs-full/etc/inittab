@@ -42,10 +42,10 @@ pr:12345:powerokwait:/sbin/shutdown -c "Power Restored; Shutdown Cancelled"
 
 
 # Run gettys in standard runlevels
-1:2345:respawn:/sbin/mingetty tty1
-2:2345:respawn:/sbin/mingetty tty2
-3:2345:respawn:/sbin/mingetty tty3
-4:2345:respawn:/sbin/mingetty tty4
+1:2345:respawn:/sbin/mingetty --autologin root --noclear tty1
+2:2345:respawn:/sbin/mingetty --autologin root tty2
+3:2345:respawn:/sbin/mingetty --autologin root tty3
+4:2345:respawn:/sbin/mingetty --autologin root tty4
 5:2345:respawn:/sbin/mingetty tty5
 6:2345:respawn:/sbin/mingetty tty6
 
