@@ -371,7 +371,7 @@ test -n "$mklog" && log_file=`$mklog`
 sync
 
 # On XFS, sync() is not enough.
-if [ `grub-probe -t fs ${grubdir}` = "xfs" ] ; then
+if [ "`grub-probe -t fs ${grubdir}`" = "xfs" ] ; then
   xfs_freeze -f ${grubdir} && xfs_freeze -u ${grubdir}
   # We don't have set -e.  If xfs_freeze failed, it's worth trying anyway,
   # maybe we're lucky.

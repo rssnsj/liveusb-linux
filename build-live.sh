@@ -118,7 +118,7 @@ do_kernel_make()
 		)
 	done
 
-	# Regenerate module dependencies after updated drivers
+	# Regenerate module dependencies after copying drivers
 	chroot_real $VFS_SOURCE depmod -a $KERNEL_RELEASE
 	sleep 1
 	clean_chroot $VFS_SOURCE
@@ -201,6 +201,7 @@ do_install()
 
 	mkdir -p $disk_mnt
 	mount $disk_dev $disk_mnt
+	echo "Mounted '$disk_dev' to '$disk_mnt'."
 	mkdir -p $disk_mnt/boot
 	cp -v $BOOT_BUILD_DIR/vmlinuz-$KERNEL_RELEASE $BOOT_BUILD_DIR/vfs-full.gz $disk_mnt/boot/
 
@@ -209,46 +210,71 @@ do_install()
 	#sleep 1
 	#clean_chroot $VFS_SOURCE
 
-	umount $disk_mnt
-	rmdir $disk_mnt
-
-	echo
-	echo -ne "\033[32m"
-	echo -n ">>> You may have to add these options to '/boot/grub/menu.lst' of your flash disk, and run 'grub-install' to it:"
-	echo -e "\033[0m"
-	cat <<EOF
-
+	cat > .aa <<EOF
 default 0
-timeout 2
+timeout 5
 
-#color  cyan/blue white/blue
+color  cyan/blue white/blue
 
 title   Linux - $KERNEL_RELEASE (ramdisk)
 root    (hd0,0)
 kernel  /boot/vmlinuz-$KERNEL_RELEASE root=/dev/ram0 rw
 initrd  /boot/vfs-full.gz
+EOF
+
+	if ! [ -f $disk_mnt/boot/grub/menu.lst ]; then
+		mkdir -p $disk_mnt/boot/grub
+		cat .aa > $disk_mnt/boot/grub/menu.lst
+	fi
+
+	umount $disk_mnt
+	rmdir $disk_mnt
+	echo "Unmounted '$disk_dev' from '$disk_mnt'."
+
+	echo
+	echo -e "\033[32m"">>> You may have to add these options to '/boot/grub/menu.lst' of your flash disk:""\033[0m"
+	echo
+	cat .aa
+	rm -f .aa
+	echo
+	echo -e "\033[32m"">>> Then run:""\033[0m"
+	cat <<EOF
+
+mkdir -p vfs-full/media
+mount $disk_dev vfs-full/media
+$0 chroot
+grub-install `echo $disk_dev | sed 's/[0-9]\+$//'` --root-directory=/media
+exit
+umount vfs-full/media
 
 EOF
+
+}
+
+do_enter_chroot()
+{
+	chroot_real $VFS_SOURCE bash || :
+	sleep 0.2
+	clean_chroot $VFS_SOURCE
 }
 
 do_clean()
 {
+	rm -f .aa
 	rm -rf $BOOT_BUILD_DIR
-	rm -f $BOOT_BUILD_DIR/vfs-full.gz
 
 	( cd $VFS_SOURCE; rm -rf lib/firmware lib/modules )
 
 	if [ -d $KERNEL_SOURCE ]; then
-		echo -n "Delete kernel source directory '$KERNEL_SOURCE' [y/N]? "
 		local cf
-		read cf
-		if [ "$cf" = y -o "$cf" = Y ]; then
-			echo "Deleting $KERNEL_SOURCE ..."
-			rm -rf $KERNEL_SOURCE
-			echo "Done."
-		else
-			echo "Given up."
-		fi
+		read -p "Delete kernel source directory '$KERNEL_SOURCE' [y/N]? " cf
+		case "$cf" in
+			y*|Y*)
+				echo "Deleting $KERNEL_SOURCE ..."
+				rm -rf $KERNEL_SOURCE
+				echo "Done."
+				;;
+		esac
 	fi
 }
 
@@ -262,11 +288,15 @@ case "$1" in
 	"install")
 		do_install $2
 		;;
+	"chroot")
+		do_enter_chroot
+		;;
 	*)
 		echo "Bootable LiveUSB Linux creator."
 		echo "Usage:"
 		echo "  $0 create                build kernel image and rootfs ramdisk"
 		echo "  $0 install /dev/sdxn     write to your flash disk"
+		echo "  $0 chroot                chroot to the target filesystem"
 		echo "  $0 clean                 clean up workspace"
 		echo "  $0                       show help"
 		;;

@@ -6,6 +6,8 @@ alias rm='rm -i'
 alias cp='cp -i'
 alias mv='mv -i'
 
+export LS_COLORS=
+
 alias ls='ls --color'
 alias ll='ls -l'
 alias l='ls -lA'
