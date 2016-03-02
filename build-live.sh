@@ -65,26 +65,31 @@ build_kernel()
 {
 	# Check if kernel source exists, if not download it
 	if ! [ -d $KERNEL_BUILD_DIR ]; then
-		local __kernel_tar=`basename "$KERNEL_DOWNLOAD_URL"`
-		if ! [ -f "$__kernel_tar" ]; then
-			wget $KERNEL_DOWNLOAD_URL -O $__kernel_tar
+		local kernel_tar=`basename "$KERNEL_DOWNLOAD_URL"`
+		if ! [ -f "$kernel_tar" ]; then
+			wget $KERNEL_DOWNLOAD_URL -O $kernel_tar
 		fi
 
-		case "$__kernel_tar" in
+		local tar_opts=
+		case "$kernel_tar" in
 			*.tar.bz2)
-				tar jxf $__kernel_tar
+				tar_opts=jxf
 				;;
 			*.tar.gz)
-				tar zxf $__kernel_tar
+				tar_opts=zxf
 				;;
 			*.tar.xz)
-				tar Jxf $__kernel_tar
+				tar_opts=Jxf
 				;;
 			*)
-				echo "*** Unsupported tarball format '$__kernel_tar'."
+				echo "*** Unsupported tarball format '$kernel_tar'."
 				exit 1
 				;;
 		esac
+
+		print_green "Extracting the kernel ..."
+		tar $tar_opts $kernel_tar
+		print_green "Done."
 	fi
 
 	# Check symlink: config -> config-x.x.x-xxx
@@ -104,7 +109,7 @@ build_kernel()
 
 	# Compile the kernel and selected drivers using 8 threads
 	make -j4 -C $KERNEL_BUILD_DIR
-	# .config may change during compiling, update the one in repository
+	# .config may change during compiling, update the one in source
 	### cat $KERNEL_BUILD_DIR/.config > config
 
 	mkdir -p $BOOT_BUILD_DIR
@@ -127,7 +132,6 @@ do_build_all()
 	
 	build_kernel
 	
-	#cp /boot/*-$KERNEL_RELEASE boot/
 	dd if=/dev/zero of=$img_file bs=1M count=64
 	echo y | mkfs.ext2 -I128 $img_file
 	mkdir -p $img_mnt
@@ -166,7 +170,6 @@ do_build_all()
 		chmod 600 *_key
 	)
 
-	#cp -a /lib/modules/$KERNEL_RELEASE $img_mnt/lib/modules/
 	umount $img_mnt
 	rmdir $img_mnt
 	gzip -c $img_file > $BOOT_BUILD_DIR/vfs-full.gz
@@ -176,7 +179,7 @@ do_build_all()
 	mkdir -p $BOOT_BUILD_DIR/grub
 	( generate_grub_menu ) > $BOOT_BUILD_DIR/grub/menu.lst
 
-	print_green ">>> Built successfully."
+	print_green "Built successfully."
 }
 
 do_install_disk()
@@ -204,7 +207,7 @@ do_install_disk()
 
 	mkdir -p $VFS_SOURCE_DIR/__disk__
 	mount $disk_dev $VFS_SOURCE_DIR/__disk__
-	echo "Mounted '$disk_dev' to '$VFS_SOURCE_DIR/__disk__'."
+	print_green "Mounted '$disk_dev' to '$VFS_SOURCE_DIR/__disk__'."
 	mkdir -p $VFS_SOURCE_DIR/__disk__/boot
 	cp -v $BOOT_BUILD_DIR/vmlinuz-$KERNEL_RELEASE $BOOT_BUILD_DIR/vfs-full.gz $VFS_SOURCE_DIR/__disk__/boot/
 
@@ -220,7 +223,7 @@ do_install_disk()
 
 	umount $VFS_SOURCE_DIR/__disk__
 	rmdir $VFS_SOURCE_DIR/__disk__
-	echo "Unmounted '$disk_dev' from '$VFS_SOURCE_DIR/__disk__'."
+	print_green "Unmounted '$disk_dev' from '$VFS_SOURCE_DIR/__disk__'."
 
 	echo
 	print_green ">>> You may have to add these options to '/boot/grub/menu.lst' of your flash disk:"
