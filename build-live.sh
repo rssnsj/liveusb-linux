@@ -113,11 +113,12 @@ build_kernel()
 	### cat $KERNEL_BUILD_DIR/.config > config
 
 	mkdir -p $BOOT_BUILD_DIR
-	# Build the kernel and install modules
-	make modules_install -C $KERNEL_BUILD_DIR INSTALL_PATH=`pwd`/$BOOT_BUILD_DIR INSTALL_MOD_PATH=`pwd`/$VFS_SOURCE_DIR
+	# Compile
+	make -C $KERNEL_BUILD_DIR
 	# Install kernel image
-	make install -C $KERNEL_BUILD_DIR INSTALL_PATH=`pwd`/$BOOT_BUILD_DIR INSTALL_MOD_PATH=`pwd`/$VFS_SOURCE_DIR
-	rm -vf $BOOT_BUILD_DIR/{*.old,config-$KERNEL_RELEASE,System.map-$KERNEL_RELEASE,initrd.img-$KERNEL_RELEASE}
+	cp $KERNEL_BUILD_DIR/arch/x86/boot/bzImage $BOOT_BUILD_DIR/vmlinuz-$KERNEL_RELEASE
+	# Install modules
+	make modules_install -C $KERNEL_BUILD_DIR INSTALL_MOD_PATH=`pwd`/$VFS_SOURCE_DIR
 
 	# Regenerate module dependencies after copying drivers
 	chroot_real $VFS_SOURCE_DIR depmod -a $KERNEL_RELEASE
