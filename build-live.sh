@@ -1,16 +1,21 @@
 #!/bin/bash -e
 
-cd `dirname $0`
-
 KERNEL_VERSION=4.1.18
 KERNEL_RELEASE=$KERNEL_VERSION-liveusb
 KERNEL_DOWNLOAD_URL="https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.1.18.tar.gz"
 
-SRC_ROOT=`pwd`
-VFS_SOURCE=$SRC_ROOT/vfs-full
-BOOT_BUILD_DIR=$SRC_ROOT/boot
-KERNEL_SOURCE=$SRC_ROOT/linux-$KERNEL_VERSION
+VFS_SOURCE_DIR=vfs-full
+BOOT_BUILD_DIR=boot
+KERNEL_BUILD_DIR=linux-$KERNEL_VERSION
 
+print_green()
+{
+	local stdin=`readlink /proc/self/fd/0`
+	case "$stdin" in
+		/dev/tty*|/dev/pt*) echo -ne "\033[32m"; echo -n "$@"; echo -e "\033[0m";;
+		*) echo "$@";;
+	esac
+}
 chroot_real()
 {
 	local dir="$1"
@@ -39,38 +44,44 @@ clean_chroot()
 	)
 }
 
-do_kernel_make()
+generate_grub_menu()
 {
-	# "ARCH=xxx" attached to "make" while compiling kernel or module
-	local __k_make_opts=""
+	cat <<EOF
+default 0
+timeout 5
 
-	# If building on a 64-bit system, specify the target arch
-	#case "`uname -m`" in
-	#	i?86)
-	#		__k_make_opts=""
-	#		;;
-	#	x86_64)
-	#		__k_make_opts="ARCH=i386"
-	#		;;
-	#	*)
-	#		echo "*** Unrecognized arch type of current OS '`uname -m`'."
-	#		exit 1
-	#		;;
-	#esac
-	
+color  cyan/blue white/blue
+
+title   Linux - $KERNEL_RELEASE (ramdisk)
+root    (hd0,0)
+kernel  /boot/vmlinuz-$KERNEL_RELEASE root=/dev/ram0 rw
+initrd  /boot/vfs-full.gz
+
+EOF
+
+}
+
+build_kernel()
+{
 	# Check if kernel source exists, if not download it
-	if [ ! -e $KERNEL_SOURCE ]; then
+	if ! [ -d $KERNEL_BUILD_DIR ]; then
 		local __kernel_tar=`basename "$KERNEL_DOWNLOAD_URL"`
-		[ ! -e "$__kernel_tar" ] && wget $KERNEL_DOWNLOAD_URL -O $__kernel_tar
+		if ! [ -f "$__kernel_tar" ]; then
+			wget $KERNEL_DOWNLOAD_URL -O $__kernel_tar
+		fi
+
 		case "$__kernel_tar" in
 			*.tar.bz2)
-				tar -jxvf $__kernel_tar
+				tar jxf $__kernel_tar
 				;;
 			*.tar.gz)
-				tar -zxvf $__kernel_tar
+				tar zxf $__kernel_tar
+				;;
+			*.tar.xz)
+				tar Jxf $__kernel_tar
 				;;
 			*)
-				echo "*** Invalid tarball format '$__kernel_tar'."
+				echo "*** Unsupported tarball format '$__kernel_tar'."
 				exit 1
 				;;
 		esac
@@ -83,7 +94,7 @@ do_kernel_make()
 	fi
 
 	# If the repository config file is newer, just use it
-	cat config > $KERNEL_SOURCE/.config
+	cat config > $KERNEL_BUILD_DIR/.config
 
 	local i
 	for i in 5 4 3 2 1; do
@@ -92,60 +103,45 @@ do_kernel_make()
 	done
 
 	# Compile the kernel and selected drivers using 8 threads
-	make -j4 -C $KERNEL_SOURCE $__k_make_opts
-	# .config may change during compiling, update the repository one
-	### cat $KERNEL_SOURCE/.config > config
+	make -j4 -C $KERNEL_BUILD_DIR
+	# .config may change during compiling, update the one in repository
+	### cat $KERNEL_BUILD_DIR/.config > config
 
-	# Install kernel image to "./boot" directory
 	mkdir -p $BOOT_BUILD_DIR
-	make install -C $KERNEL_SOURCE $__k_make_opts INSTALL_PATH=$BOOT_BUILD_DIR
-	rm -vf $BOOT_BUILD_DIR/{*.old,config-$KERNEL_RELEASE,System.map-$KERNEL_RELEASE}
-
-	# Install modules to "/lib/modules" of current system
-	make modules_install -C $KERNEL_SOURCE $__k_make_opts INSTALL_MOD_PATH=$VFS_SOURCE
-
-	# Replace Intel NIC drivers with the newly compiled
-	local __driver_dir=""
-	for __driver_dir in e1000-* e1000e-* igb-* ixgbe-*; do
-		[ -d "$__driver_dir" ] || continue
-		(
-			local __d_name=`echo "$__driver_dir" | awk -F- '{print $1}'`
-			local __d_dir=$VFS_SOURCE/lib/modules/$KERNEL_RELEASE/kernel/drivers/net/$__d_name
-			cd $__driver_dir/src
-			make KSRC=$KERNEL_SOURCE $__k_make_opts
-			[ ! -e "$__d_dir" ] && mkdir $__d_dir
-			cp $__d_name.ko $__d_dir/
-		)
-	done
+	# Build the kernel and install modules
+	make modules_install -C $KERNEL_BUILD_DIR INSTALL_PATH=`pwd`/$BOOT_BUILD_DIR INSTALL_MOD_PATH=`pwd`/$VFS_SOURCE_DIR
+	# Install kernel image
+	make install -C $KERNEL_BUILD_DIR INSTALL_PATH=`pwd`/$BOOT_BUILD_DIR INSTALL_MOD_PATH=`pwd`/$VFS_SOURCE_DIR
+	rm -vf $BOOT_BUILD_DIR/{*.old,config-$KERNEL_RELEASE,System.map-$KERNEL_RELEASE,initrd.img-$KERNEL_RELEASE}
 
 	# Regenerate module dependencies after copying drivers
-	chroot_real $VFS_SOURCE depmod -a $KERNEL_RELEASE
+	chroot_real $VFS_SOURCE_DIR depmod -a $KERNEL_RELEASE
 	sleep 1
-	clean_chroot $VFS_SOURCE
+	clean_chroot $VFS_SOURCE_DIR
 }
 
-do_vfs_make()
+do_build_all()
 {
-	local __vfs_img=$SRC_ROOT/__vfs_img__
-	local __vfs_mnt=$SRC_ROOT/__vfs_mnt__
+	local img_file=`pwd`/__vfs_img__
+	local img_mnt=`pwd`/__vfs_mnt__
 	
-	do_kernel_make
+	build_kernel
 	
 	#cp /boot/*-$KERNEL_RELEASE boot/
-	dd if=/dev/zero of=$__vfs_img bs=1M count=64
-	echo y | mkfs.ext2 -I128 $__vfs_img
-	mkdir -p $__vfs_mnt
-	mount $__vfs_img $__vfs_mnt -o loop
+	dd if=/dev/zero of=$img_file bs=1M count=64
+	echo y | mkfs.ext2 -I128 $img_file
+	mkdir -p $img_mnt
+	mount $img_file $img_mnt -o loop
 	(
-		cd $VFS_SOURCE
-		tar -c --exclude-vcs * | tar -x -C $__vfs_mnt
+		cd $VFS_SOURCE_DIR
+		tar -c --exclude-vcs * | tar -x -C $img_mnt
 
 		# Rebuild the empty directories
-		cd $__vfs_mnt
+		cd $img_mnt
 		mkdir -p dev sys proc tmp var/run media
 
 		# Build /dev sub-directories
-		cd $__vfs_mnt/dev
+		cd $img_mnt/dev
 		mknod ram0 b 1 0
 		mknod ram1 b 1 1
 		mknod ram2 b 1 2
@@ -165,28 +161,35 @@ do_vfs_make()
 		mknod zero c 1 5
 		mkdir -p pts shm
 
-		# Fix /etc/ssh permissions
-		cd $__vfs_mnt/etc/ssh
+		# Fix file permissions
+		cd $img_mnt/etc/ssh
 		chmod 600 *_key
 	)
 
-	#cp -a /lib/modules/$KERNEL_RELEASE $__vfs_mnt/lib/modules/
-	umount $__vfs_mnt
-	rmdir $__vfs_mnt
-	gzip -c $__vfs_img > $BOOT_BUILD_DIR/vfs-full.gz
-	rm -f $__vfs_img
+	#cp -a /lib/modules/$KERNEL_RELEASE $img_mnt/lib/modules/
+	umount $img_mnt
+	rmdir $img_mnt
+	gzip -c $img_file > $BOOT_BUILD_DIR/vfs-full.gz
+	rm -f $img_file
+
+	# Write a menu.lst sample
+	mkdir -p $BOOT_BUILD_DIR/grub
+	( generate_grub_menu ) > $BOOT_BUILD_DIR/grub/menu.lst
+
+	print_green ">>> Built successfully."
 }
 
-do_install()
+do_install_disk()
 {
-	if [ -z "$1" ]; then
+	local disk_dev="$1"
+
+	if [ -z "$disk_dev" ]; then
 		echo "*** Requiring target disk partition."
 		exit 1
+	elif ! [ -b "$disk_dev" ]; then
+		echo "*** '$disk_dev' is not a valid block device."
+		exit 1
 	fi
-
-	local disk_dev="$1"
-	local disk_mnt_rel=__disk__
-	local disk_mnt=$VFS_SOURCE/$disk_mnt_rel
 
 	if ! [ -f $BOOT_BUILD_DIR/vmlinuz-$KERNEL_RELEASE -a -f $BOOT_BUILD_DIR/vfs-full.gz ]; then
 		echo "*** Missing kernel or ramdisk images. Perform the 'create' operation before 'install'."
@@ -199,53 +202,41 @@ do_install()
 		sleep 1
 	done
 
-	mkdir -p $disk_mnt
-	mount $disk_dev $disk_mnt
-	echo "Mounted '$disk_dev' to '$disk_mnt'."
-	mkdir -p $disk_mnt/boot
-	cp -v $BOOT_BUILD_DIR/vmlinuz-$KERNEL_RELEASE $BOOT_BUILD_DIR/vfs-full.gz $disk_mnt/boot/
+	mkdir -p $VFS_SOURCE_DIR/__disk__
+	mount $disk_dev $VFS_SOURCE_DIR/__disk__
+	echo "Mounted '$disk_dev' to '$VFS_SOURCE_DIR/__disk__'."
+	mkdir -p $VFS_SOURCE_DIR/__disk__/boot
+	cp -v $BOOT_BUILD_DIR/vmlinuz-$KERNEL_RELEASE $BOOT_BUILD_DIR/vfs-full.gz $VFS_SOURCE_DIR/__disk__/boot/
 
 	# Install GRUB
-	#chroot_real $VFS_SOURCE grub-install `echo $disk_dev | sed 's/[0-9]\+$//'` --root-directory=/$disk_mnt_rel
+	#chroot_real $VFS_SOURCE_DIR grub-install `echo $disk_dev | sed 's/[0-9]\+$//'` --root-directory=/__disk__
 	#sleep 1
-	#clean_chroot $VFS_SOURCE
+	#clean_chroot $VFS_SOURCE_DIR
 
-	cat > .aa <<EOF
-default 0
-timeout 5
-
-color  cyan/blue white/blue
-
-title   Linux - $KERNEL_RELEASE (ramdisk)
-root    (hd0,0)
-kernel  /boot/vmlinuz-$KERNEL_RELEASE root=/dev/ram0 rw
-initrd  /boot/vfs-full.gz
-EOF
-
-	if ! [ -f $disk_mnt/boot/grub/menu.lst ]; then
-		mkdir -p $disk_mnt/boot/grub
-		cat .aa > $disk_mnt/boot/grub/menu.lst
+	if ! [ -f $VFS_SOURCE_DIR/__disk__/boot/grub/menu.lst ]; then
+		mkdir -p $VFS_SOURCE_DIR/__disk__/boot/grub
+		( generate_grub_menu ) > $VFS_SOURCE_DIR/__disk__/boot/grub/menu.lst
 	fi
 
-	umount $disk_mnt
-	rmdir $disk_mnt
-	echo "Unmounted '$disk_dev' from '$disk_mnt'."
+	umount $VFS_SOURCE_DIR/__disk__
+	rmdir $VFS_SOURCE_DIR/__disk__
+	echo "Unmounted '$disk_dev' from '$VFS_SOURCE_DIR/__disk__'."
 
 	echo
-	echo -e "\033[32m"">>> You may have to add these options to '/boot/grub/menu.lst' of your flash disk:""\033[0m"
+	print_green ">>> You may have to add these options to '/boot/grub/menu.lst' of your flash disk:"
 	echo
-	cat .aa
-	rm -f .aa
+	generate_grub_menu
 	echo
-	echo -e "\033[32m"">>> Then run:""\033[0m"
+	print_green ">>> Then run:"
+
 	cat <<EOF
 
-mkdir -p vfs-full/media
-mount $disk_dev vfs-full/media
+mkdir -p $VFS_SOURCE_DIR/media
+mount $disk_dev $VFS_SOURCE_DIR/media
 $0 chroot
 grub-install `echo $disk_dev | sed 's/[0-9]\+$//'` --root-directory=/media
 exit
-umount vfs-full/media
+umount $VFS_SOURCE_DIR/media
 
 EOF
 
@@ -253,25 +244,24 @@ EOF
 
 do_enter_chroot()
 {
-	chroot_real $VFS_SOURCE bash || :
+	chroot_real $VFS_SOURCE_DIR bash || :
 	sleep 0.2
-	clean_chroot $VFS_SOURCE
+	clean_chroot $VFS_SOURCE_DIR
 }
 
-do_clean()
+do_cleanup()
 {
-	rm -f .aa
 	rm -rf $BOOT_BUILD_DIR
 
-	( cd $VFS_SOURCE; rm -rf lib/firmware lib/modules )
+	( cd $VFS_SOURCE_DIR; rm -rf lib/firmware lib/modules )
 
-	if [ -d $KERNEL_SOURCE ]; then
+	if [ -d $KERNEL_BUILD_DIR ]; then
 		local cf
-		read -p "Delete kernel source directory '$KERNEL_SOURCE' [y/N]? " cf
+		read -p "Delete kernel source directory '$KERNEL_BUILD_DIR' [y/N]? " cf
 		case "$cf" in
 			y*|Y*)
-				echo "Deleting $KERNEL_SOURCE ..."
-				rm -rf $KERNEL_SOURCE
+				echo "Deleting $KERNEL_BUILD_DIR ..."
+				rm -rf $KERNEL_BUILD_DIR
 				echo "Done."
 				;;
 		esac
@@ -280,13 +270,13 @@ do_clean()
 
 case "$1" in
 	"create")
-		do_vfs_make
+		do_build_all
 		;;
 	"clean")
-		do_clean
+		do_cleanup
 		;;
 	"install")
-		do_install $2
+		do_install_disk $2
 		;;
 	"chroot")
 		do_enter_chroot
@@ -297,7 +287,7 @@ case "$1" in
 		echo "  $0 create                build kernel image and rootfs ramdisk"
 		echo "  $0 install /dev/sdxn     write to your flash disk"
 		echo "  $0 chroot                chroot to the target filesystem"
-		echo "  $0 clean                 clean up workspace"
+		echo "  $0 clean                 cleanup workspace"
 		echo "  $0                       show help"
 		;;
 esac
