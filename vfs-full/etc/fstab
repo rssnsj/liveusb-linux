@@ -1,4 +1,4 @@
-none            /               ext2    defaults        0 0
+none            /               auto    defaults        0 0
 proc            /proc           proc    defaults        0 0
 sysfs           /sys            sysfs   defaults        0 0
 tmp             /tmp            tmpfs   defaults        0 0

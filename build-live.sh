@@ -61,7 +61,7 @@ EOF
 
 }
 
-build_kernel()
+__prepare_kernel_dir()
 {
 	# Check if kernel source exists, if not download it
 	if ! [ -d $KERNEL_BUILD_DIR ]; then
@@ -94,11 +94,30 @@ build_kernel()
 
 	# Check symlink: config -> config-x.x.x-xxx
 	if ! [ -L config ]; then
-		echo "*** Please create symbolic link 'config' to either of the config files."
+		echo "*** Please create symbolic link 'config' to one of the config files."
 		exit 1
 	fi
+}
 
-	# If the repository config file is newer, just use it
+do_menuconfig()
+{
+	__prepare_kernel_dir
+
+	# Backup old config
+	( cd $KERNEL_BUILD_DIR; [ -f .config ] && cp .config .config.bak || : )
+	# Use new config
+	cat config > $KERNEL_BUILD_DIR/.config
+	# Show menuconfig window
+	( cd $KERNEL_BUILD_DIR; exec make menuconfig ) || exit 1
+	# Copy back
+	cat $KERNEL_BUILD_DIR/.config > config
+}
+
+build_kernel()
+{
+	__prepare_kernel_dir
+
+	# Use the config file
 	cat config > $KERNEL_BUILD_DIR/.config
 
 	local i
@@ -273,22 +292,26 @@ do_cleanup()
 }
 
 case "$1" in
-	"create")
+	create)
 		do_build_all
 		;;
-	"clean")
+	menuconfig)
+		do_menuconfig
+		;;
+	clean)
 		do_cleanup
 		;;
-	"install")
+	install)
 		do_install_disk $2
 		;;
-	"chroot")
+	chroot)
 		do_enter_chroot
 		;;
 	*)
 		echo "Bootable LiveUSB Linux creator."
 		echo "Usage:"
 		echo "  $0 create                build kernel image and rootfs ramdisk"
+		echo "  $0 menuconfig            show menuconfig for updating kernel configuration"
 		echo "  $0 install /dev/sdxn     write to your flash disk"
 		echo "  $0 chroot                chroot to the target filesystem"
 		echo "  $0 clean                 cleanup workspace"

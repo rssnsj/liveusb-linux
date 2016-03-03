@@ -10,6 +10,9 @@ install:
 	 fi
 	@./build-live.sh install $(D)
 
+menuconfig:
+	@./build-live.sh menuconfig
+
 chroot:
 	@./build-live.sh chroot || :
 
