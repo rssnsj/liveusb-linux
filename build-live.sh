@@ -261,9 +261,9 @@ do_cleanup()
 
 	if [ -d $KERNEL_BUILD_DIR ]; then
 		local cf
-		read -p "Delete kernel source directory '$KERNEL_BUILD_DIR' [y/N]? " cf
+		read -p "Delete kernel source directory '$KERNEL_BUILD_DIR' [yes/No]? " cf
 		case "$cf" in
-			y*|Y*)
+			yes|YES)
 				echo "Deleting $KERNEL_BUILD_DIR ..."
 				rm -rf $KERNEL_BUILD_DIR
 				echo "Done."
