@@ -5,8 +5,10 @@ KERNEL_RELEASE=$KERNEL_VERSION-liveusb
 KERNEL_DOWNLOAD_URL="https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.1.18.tar.gz"
 
 VFS_SOURCE_DIR=vfs-full
-BOOT_BUILD_DIR=boot
+BOOT_INSTALL_DIR=boot
 KERNEL_BUILD_DIR=linux-$KERNEL_VERSION
+VMLINUZ_FILE=vmlinuz-$KERNEL_RELEASE
+RAMDISK_FILE=ramdisk.img-$KERNEL_RELEASE
 
 print_green()
 {
@@ -54,8 +56,8 @@ color  cyan/blue white/blue
 
 title   Linux - $KERNEL_RELEASE (ramdisk)
 root    (hd0,0)
-kernel  /boot/vmlinuz-$KERNEL_RELEASE root=/dev/ram0 rw
-initrd  /boot/vfs-full.gz
+kernel  /boot/$VMLINUZ_FILE root=/dev/ram0 rw
+initrd  /boot/$RAMDISK_FILE
 
 EOF
 
@@ -113,7 +115,7 @@ do_menuconfig()
 	cat $KERNEL_BUILD_DIR/.config > config
 }
 
-build_kernel()
+__build_kernel()
 {
 	__prepare_kernel_dir
 
@@ -131,11 +133,11 @@ build_kernel()
 	# .config may change during compiling, update the one in source
 	### cat $KERNEL_BUILD_DIR/.config > config
 
-	mkdir -p $BOOT_BUILD_DIR
+	mkdir -p $BOOT_INSTALL_DIR
 	# Compile
 	make -C $KERNEL_BUILD_DIR
 	# Install kernel image
-	cp $KERNEL_BUILD_DIR/arch/x86/boot/bzImage $BOOT_BUILD_DIR/vmlinuz-$KERNEL_RELEASE
+	cp $KERNEL_BUILD_DIR/arch/x86/boot/bzImage $BOOT_INSTALL_DIR/$VMLINUZ_FILE
 	# Install modules
 	make modules_install -C $KERNEL_BUILD_DIR INSTALL_MOD_PATH=`pwd`/$VFS_SOURCE_DIR
 
@@ -147,25 +149,25 @@ build_kernel()
 
 do_build_all()
 {
-	local img_file=`pwd`/__vfs_img__
-	local img_mnt=`pwd`/__vfs_mnt__
+	local rd_file=`pwd`/__ramdisk.img__
+	local rd_mnt=`pwd`/__ramdisk.mnt__
 	
-	build_kernel
+	__build_kernel
 	
-	dd if=/dev/zero of=$img_file bs=1M count=64
-	echo y | mkfs.ext2 -I128 $img_file
-	mkdir -p $img_mnt
-	mount $img_file $img_mnt -o loop
+	dd if=/dev/zero of=$rd_file bs=1M count=64
+	echo y | mkfs.ext2 -I128 $rd_file
+	mkdir -p $rd_mnt
+	mount $rd_file $rd_mnt -o loop
 	(
 		cd $VFS_SOURCE_DIR
-		tar -c --exclude-vcs * | tar -x -C $img_mnt
+		tar -c --exclude-vcs * | tar -x -C $rd_mnt
 
 		# Rebuild the empty directories
-		cd $img_mnt
+		cd $rd_mnt
 		mkdir -p dev sys proc tmp var/run media
 
 		# Build /dev sub-directories
-		cd $img_mnt/dev
+		cd $rd_mnt/dev
 		mknod ram0 b 1 0
 		mknod ram1 b 1 1
 		mknod ram2 b 1 2
@@ -186,18 +188,18 @@ do_build_all()
 		mkdir -p pts shm
 
 		# Fix file permissions
-		cd $img_mnt/etc/ssh
+		cd $rd_mnt/etc/ssh
 		chmod 600 *_key
 	)
 
-	umount $img_mnt
-	rmdir $img_mnt
-	gzip -c $img_file > $BOOT_BUILD_DIR/vfs-full.gz
-	rm -f $img_file
+	umount $rd_mnt
+	rmdir $rd_mnt
+	gzip -c $rd_file > $BOOT_INSTALL_DIR/$RAMDISK_FILE
+	rm -f $rd_file
 
 	# Write a menu.lst sample
-	mkdir -p $BOOT_BUILD_DIR/grub
-	( generate_grub_menu ) > $BOOT_BUILD_DIR/grub/menu.lst
+	mkdir -p $BOOT_INSTALL_DIR/grub
+	( generate_grub_menu ) > $BOOT_INSTALL_DIR/grub/menu.lst
 
 	print_green "Built successfully."
 }
@@ -214,7 +216,7 @@ do_install_disk()
 		exit 1
 	fi
 
-	if ! [ -f $BOOT_BUILD_DIR/vmlinuz-$KERNEL_RELEASE -a -f $BOOT_BUILD_DIR/vfs-full.gz ]; then
+	if ! [ -f $BOOT_INSTALL_DIR/$VMLINUZ_FILE -a -f $BOOT_INSTALL_DIR/$RAMDISK_FILE ]; then
 		echo "*** Missing kernel or ramdisk images. Perform the 'create' operation before 'install'."
 		exit 1
 	fi
@@ -229,7 +231,7 @@ do_install_disk()
 	mount $disk_dev $VFS_SOURCE_DIR/__disk__
 	print_green "Mounted '$disk_dev' to '$VFS_SOURCE_DIR/__disk__'."
 	mkdir -p $VFS_SOURCE_DIR/__disk__/boot
-	cp -v $BOOT_BUILD_DIR/vmlinuz-$KERNEL_RELEASE $BOOT_BUILD_DIR/vfs-full.gz $VFS_SOURCE_DIR/__disk__/boot/
+	cp -v $BOOT_INSTALL_DIR/$VMLINUZ_FILE $BOOT_INSTALL_DIR/$RAMDISK_FILE $VFS_SOURCE_DIR/__disk__/boot/
 
 	# Install GRUB
 	#chroot_real $VFS_SOURCE_DIR grub-install `echo $disk_dev | sed 's/[0-9]\+$//'` --root-directory=/__disk__
@@ -274,7 +276,7 @@ do_enter_chroot()
 
 do_cleanup()
 {
-	rm -rf $BOOT_BUILD_DIR
+	rm -rf $BOOT_INSTALL_DIR
 
 	( cd $VFS_SOURCE_DIR; rm -rf lib/firmware lib/modules )
 
