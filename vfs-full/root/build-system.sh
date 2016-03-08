@@ -59,7 +59,7 @@ confirm_short()
 {
 	local m=""
 	echo -n "$1 "
-	[ ! -z "$2" ] && echo -n "[$2]? "
+	[ -n "$2" ] && echo -n "[$2]? "
 	while true; do
 		read m
 		[ -z "$m" ] && m="$2"
@@ -92,7 +92,7 @@ fdisk_and_mkswap_only()
 	local __dev_minor_i=1
 	
 	# Check root options
-	if [ ! -z "$ROOT_OPTION" ]; then
+	if [ -n "$ROOT_OPTION" ]; then
 		local __root_sz=`echo $ROOT_OPTION |awk -F, 'NR==1 {print $1}'`
 		ROOT_FS_TYPE=`echo $ROOT_OPTION |awk -F, 'NR==1 {print $2}'`
 		ROOT_FS_LABEL=`echo $ROOT_OPTION |awk -F, 'NR==1 {print $3}'`
@@ -115,12 +115,12 @@ fdisk_and_mkswap_only()
 	fi
 	
 	# Check swap options
-	if [ ! -z "$SWAP_OPTION" ]; then
+	if [ -n "$SWAP_OPTION" ]; then
 		[ -z "$root_sz_mb" ] && { log_error_msg "Cannot create swap area if you use the entire disk as root. "; return 1; }
 		###
 		local __swap_sz=`echo $SWAP_OPTION |awk -F, 'NR==1 {print $1}'`
 		SWAP_FS_LABEL=`echo $SWAP_OPTION |awk -F, 'NR==1 {print $2}'`
-		[ ! -z "$__swap_sz" ] && swap_sz_mb=`echo $__swap_sz |awk -F'[MmGg]' '/[0-9.]*[gG]/{print int(1024*$1);} /[0-9]*[Mm]/{print int($1);}'`
+		[ -n "$__swap_sz" ] && swap_sz_mb=`echo $__swap_sz |awk -F'[MmGg]' '/[0-9.]*[gG]/{print int(1024*$1);} /[0-9]*[Mm]/{print int($1);}'`
 		[ -z "$swap_sz_mb" ] && { log_error_msg "Invalid size for swap area. "; return 1; }
 		# Check the label name, or assign a random one if no label is set
 		[ -z "$SWAP_FS_LABEL" ] && SWAP_FS_LABEL="swap-$RAND_SUFFIX"
@@ -129,7 +129,7 @@ fdisk_and_mkswap_only()
 	fi
 	
 	# Check the 3rd partition options if needs created
-	if [ ! -z "$PART3_OPTION" ]; then
+	if [ -n "$PART3_OPTION" ]; then
 		# Check root size
 		[ -z "$root_sz_mb" ] && { log_error_msg "Cannot create 3rd partition if you use the entire disk as root. "; return 1; }
 		### Check if swap area exists, force to create it when 3rd partition specified
@@ -139,7 +139,7 @@ fdisk_and_mkswap_only()
 		PART3_FS_TYPE=`echo $PART3_OPTION |awk -F, 'NR==1 {print $2}'`
 		PART3_FS_LABEL=`echo $PART3_OPTION |awk -F, 'NR==1 {print $3}'`
 		PART3_FS_MOUNT_POINT=`echo $PART3_OPTION |awk -F, 'NR==1 {print $4}'`
-		[ ! -z "$__part3_sz" ] && part3_sz_mb=`echo $__part3_sz |awk -F'[MmGg]' '/[0-9.]*[gG]/{print int(1024*$1);} /[0-9]*[Mm]/{print int($1);}'`
+		[ -n "$__part3_sz" ] && part3_sz_mb=`echo $__part3_sz |awk -F'[MmGg]' '/[0-9.]*[gG]/{print int(1024*$1);} /[0-9]*[Mm]/{print int($1);}'`
 		# Check FS type, default as 'ext3'
 		[ -z "$PART3_FS_TYPE" ] && PART3_FS_TYPE="ext3"
 		###
@@ -151,18 +151,18 @@ fdisk_and_mkswap_only()
 	# Create partitions
 	(
 		# Partition 1: /
-		if [ ! -z "$root_sz_mb" ]; then
+		if [ -n "$root_sz_mb" ]; then
 			echo "0,$root_sz_mb,L,*"
 		else
 			echo "0,,L,*"
 		fi
 		# Partition 2: swap
-		if [ ! -z "$SWAP_OPTION" ]; then
+		if [ -n "$SWAP_OPTION" ]; then
 			echo ",$swap_sz_mb,S"
 		fi
 		# Partition 3: 3rd F.S.
-		if [ ! -z "$PART3_OPTION" ]; then
-			[ ! -z "$part3_sz_mb" ] && echo ",$part3_sz_mb,L" || echo ",,L"
+		if [ -n "$PART3_OPTION" ]; then
+			[ -n "$part3_sz_mb" ] && echo ",$part3_sz_mb,L" || echo ",,L"
 		fi
 		# Partition else: empty
 		while [ $__dev_minor_i -le 4 ]; do
@@ -172,12 +172,12 @@ fdisk_and_mkswap_only()
 	) | sfdisk -uM "$DISK_DEV" || { echo; log_error_msg "Partitioning error. "; return 1; }
 	
 	echo -n "Waiting for the partitions to be ready ... "
-	[ ! -z "$ROOT_FS_DEV" ] && while [ ! -e "$ROOT_FS_DEV" ]; do sleep 0.2; done
-	[ ! -z "$SWAP_FS_DEV" ] && while [ ! -e "$SWAP_FS_DEV" ]; do sleep 0.2; done
+	[ -n "$ROOT_FS_DEV" ] && while [ ! -e "$ROOT_FS_DEV" ]; do sleep 0.2; done
+	[ -n "$SWAP_FS_DEV" ] && while [ ! -e "$SWAP_FS_DEV" ]; do sleep 0.2; done
 	echo "OK!"
 	
 	# Make swap area if defined
-	if [ ! -z "$SWAP_FS_DEV" ]; then
+	if [ -n "$SWAP_FS_DEV" ]; then
 		echo "Formatting swap area on $SWAP_FS_DEV, size: ${swap_sz_mb}M, label: $SWAP_FS_LABEL ... "
 		mkswap -L "$SWAP_FS_LABEL" $SWAP_FS_DEV || \
 			{ echo; log_error_msg "Formatting swap area error. "; return 1; }
@@ -198,7 +198,7 @@ fdisk_and_mkswap_only()
 check_root_options()
 {
 	# Check root options
-	if [ ! -z "$ROOT_OPTION" ]; then
+	if [ -n "$ROOT_OPTION" ]; then
 		local __root_sz=`echo $ROOT_OPTION |awk -F, 'NR==1 {print $1}'`
 		ROOT_FS_TYPE=`echo $ROOT_OPTION |awk -F, 'NR==1 {print $2}'`
 		ROOT_FS_LABEL=`echo $ROOT_OPTION |awk -F, 'NR==1 {print $3}'`
@@ -247,7 +247,7 @@ format_linux_fs()
 		log_error_msg "Unsupported linux filesystem type '$__fs_type'. "
 		return 1
 	fi
-	[ ! -z "$__fs_label" ] && mkfs_opt="$mkfs_opt -L $__fs_label"
+	[ -n "$__fs_label" ] && mkfs_opt="$mkfs_opt -L $__fs_label"
 	###echo $mkfs_cmd $mkfs_opt $__fs_dev; exit 1
 	$mkfs_cmd $mkfs_opt $__fs_dev || { echo; log_error_msg "Formatting linux filesystem error. "; return 1; }
 	
@@ -270,7 +270,7 @@ mount_root_and_part3()
 		{ log_error_msg "Mounting '$__root_dev' to '$__root_dir' error. "; rmdir $__root_dir; return 1; }
 	
 	#  If 3rd partition exists, mount corresponding location
-	if [ ! -z "$PART3_FS_DEV" -a ! -z "$PART3_FS_MOUNT_POINT" ]; then
+	if [ -n "$PART3_FS_DEV" -a -n "$PART3_FS_MOUNT_POINT" ]; then
 		mkdir -p "${__root_dir}${PART3_FS_MOUNT_POINT}"
 		mount $PART3_FS_DEV "${__root_dir}${PART3_FS_MOUNT_POINT}" || \
 			{ log_error_msg "Mounting '$PART3_FS_DEV' to '${__root_dir}${PART3_FS_MOUNT_POINT}' error."; return 1; }
@@ -296,15 +296,15 @@ build_root_fs()
 	local __part3_desc=""
 	
 	# Determine mount descriptions for ROOT and SWAP, such as '/dev/sda1' or 'LABEL=vfs-xx'
-	[ ! -z "$ROOT_FS_LABEL" ] && __root_desc="LABEL=$ROOT_FS_LABEL" || \
+	[ -n "$ROOT_FS_LABEL" ] && __root_desc="LABEL=$ROOT_FS_LABEL" || \
 		__root_desc=`echo $ROOT_FS_DEV |sed 's#/dev/\([hs]\)d[a-z]#/dev/\1da#g'`
-	[ ! -z "$SWAP_FS_LABEL" ] && __swap_desc="LABEL=$SWAP_FS_LABEL" || \
+	[ -n "$SWAP_FS_LABEL" ] && __swap_desc="LABEL=$SWAP_FS_LABEL" || \
 		__swap_desc=`echo $SWAP_FS_DEV |sed 's#/dev/\([hs]\)d[a-z]#/dev/\1da#g'`
-	[ ! -z "$PART3_FS_LABEL" ] && __part3_desc="LABEL=$PART3_FS_LABEL" || \
+	[ -n "$PART3_FS_LABEL" ] && __part3_desc="LABEL=$PART3_FS_LABEL" || \
 		__part3_desc=`echo $PART3_FS_DEV |sed 's#/dev/\([hs]\)d[a-z]#/dev/\1da#g'`
 	
-	##[ ! -f "$__tar_file" ] && { log_error_msg "Tarball file '$__tar_file' does not exist. "; return 1; }
-	[ ! -d "$ROOT_DIR" ] && { log_error_msg "Mount point '$ROOT_DIR' does not exist. "; return 1; }
+	##[ -f "$__tar_file" ] || { log_error_msg "Tarball file '$__tar_file' does not exist. "; return 1; }
+	[ -d "$ROOT_DIR" ] || { log_error_msg "Mount point '$ROOT_DIR' does not exist. "; return 1; }
 	
 	##[ "$VERBOSE_MODE" = "y" ] && __tar_opts="$__tar_opts -v"
 	
@@ -319,15 +319,15 @@ build_root_fs()
 			wget "$__tar_file" -O- |tar -xp -C "$ROOT_DIR" || return 1
 			;;
 		*.tar.gz)
-			[ ! -f "$__tar_file" ] && { log_error_msg "Tarball file '$__tar_file' does not exist. "; return 1; }
+			[ -f "$__tar_file" ] || { log_error_msg "Tarball file '$__tar_file' does not exist. "; return 1; }
 			tar $__tar_opts -zxpf "$__tar_file" -C "$ROOT_DIR" || return 1
 			;;
 		*.tar.bz2)
-			[ ! -f "$__tar_file" ] && { log_error_msg "Tarball file '$__tar_file' does not exist. "; return 1; }
+			[ -f "$__tar_file" ] || { log_error_msg "Tarball file '$__tar_file' does not exist. "; return 1; }
 			tar $__tar_opts -jxpf "$__tar_file" -C "$ROOT_DIR" || return 1
 			;;
 		*.tar)
-			[ ! -f "$__tar_file" ] && { log_error_msg "Tarball file '$__tar_file' does not exist. "; return 1; }
+			[ -f "$__tar_file" ] || { log_error_msg "Tarball file '$__tar_file' does not exist. "; return 1; }
 			tar $__tar_opts -xpf "$__tar_file" -C "$ROOT_DIR" || return 1
 			;;
 		*)
@@ -337,7 +337,7 @@ build_root_fs()
 	esac
 
 	# Fix root filesystem
-	if [ ! -z "$ROOT_DIR" ]; then
+	if [ -n "$ROOT_DIR" ]; then
 		# Remove udev network rules
 		rm -f $ROOT_DIR/etc/udev/rules.d/*-persistent-net.rules
 		rm -f $ROOT_DIR/etc/udev/rules.d/*-network.rules
@@ -353,7 +353,7 @@ build_root_fs()
 		if [ -e "$ROOT_DIR/boot/grub/menu.lst" ]; then
 			sed -i "s# root=\(LABEL=\|/dev/[hs]d[a-z]\)[^ \t]*# root=$__root_desc#g" $ROOT_DIR/boot/grub/menu.lst
 			local root_i=`expr $ROOT_FS_DEV : '\/dev\/[sh]d[a-z]\([0-9]\)'`
-			[ ! -z "$root_i" ] && root_i=`expr $root_i - 1` || root_i=0
+			[ -n "$root_i" ] && root_i=`expr $root_i - 1` || root_i=0
 			sed -i "/^[ \t]*root/s/(hd[0-9],[0-9])/(hd0,$root_i)/" $ROOT_DIR/boot/grub/menu.lst
 		fi
 
@@ -362,21 +362,23 @@ build_root_fs()
 			# Mount options for '/'
 			sed -i "s#^[^ \t]\+\([ \t]\+\/[ \t]\+\)[^ \t]\+#$__root_desc\1$ROOT_FS_TYPE#" $ROOT_DIR/etc/fstab
 			# Mount options for swap area
-			if [ ! -z "$__swap_desc" ]; then
+			if [ -n "$__swap_desc" ]; then
 				local __fs_nr=`awk '$3~/^swap$/{print NR}' $ROOT_DIR/etc/fstab`
-				[ ! -z "$__fs_nr" ] && sed -i "${__fs_nr}d" $ROOT_DIR/etc/fstab
+				[ -n "$__fs_nr" ] && sed -i "${__fs_nr}d" $ROOT_DIR/etc/fstab
 				echo "$__swap_desc   none            swap    sw              0       0" >> $ROOT_DIR/etc/fstab
 			fi
 			# Mount options for 3rd partition
-			local __fs_nr=`awk -vp=$PART3_FS_MOUNT_POINT '$2==p{print NR}' $ROOT_DIR/etc/fstab`
-			[ ! -z "$__fs_nr" ] && sed -i "${__fs_nr}d" $ROOT_DIR/etc/fstab
-			if [ ! -z "$__part3_desc" ]; then
-				echo "$__part3_desc    $PART3_FS_MOUNT_POINT    $PART3_FS_TYPE    defaults        0       0" >> $ROOT_DIR/etc/fstab
+			if [ -n "$PART3_FS_MOUNT_POINT" ]; then
+				local __fs_nr=`awk -vp=$PART3_FS_MOUNT_POINT '$2==p{print NR}' $ROOT_DIR/etc/fstab`
+				[ -n "$__fs_nr" ] && sed -i "${__fs_nr}d" $ROOT_DIR/etc/fstab
+				if [ -n "$__part3_desc" ]; then
+					echo "$__part3_desc    $PART3_FS_MOUNT_POINT    $PART3_FS_TYPE    defaults        0       0" >> $ROOT_DIR/etc/fstab
+				fi
 			fi
 		fi
 
 		# Update hostname if it is defined
-		if [ ! -z "$ROOT_HOSTNAME" ]; then
+		if [ -n "$ROOT_HOSTNAME" ]; then
 			# For Debian, Ubuntu...
 			[ -f "$ROOT_DIR/etc/hostname" ] && echo "$ROOT_HOSTNAME" >$ROOT_DIR/etc/hostname
 			# For Redhat, Fedora, CentOS...
@@ -412,7 +414,7 @@ install_grub_mbr()
 clean_and_exit()
 {
 	#  If 3rd partition exists, umount it
-	if [ ! -z "$PART3_FS_MOUNT_POINT" ]; then
+	if [ -n "$PART3_FS_MOUNT_POINT" ]; then
 		umount "${ROOT_MOUNT_POINT}${PART3_FS_MOUNT_POINT}" >/dev/null 2>&1
 	fi
 	umount $ROOT_MOUNT_POINT >/dev/null 2>&1
@@ -547,7 +549,7 @@ else
 fi
 log_step_msg_bh "done!"
 ## ---------------------------------------------------------------------
-if [ ! -z "$PART3_OPTION" ]; then
+if [ -n "$PART3_OPTION" ]; then
 	log_step_msg "Formatting '$PART3_FS_DEV' as '$PART3_FS_TYPE', labeled '$PART3_FS_LABEL' ... "
 	if [ "$VERBOSE_MODE" = "y" ]; then
 		format_linux_fs $PART3_FS_DEV $PART3_FS_TYPE $PART3_FS_LABEL || clean_and_exit 3
