@@ -129,7 +129,9 @@ __build_kernel()
 	done
 
 	# Compile the kernel and selected drivers using 8 threads
-	make -j4 -C $KERNEL_BUILD_DIR
+	local nr_threads=`grep '^processor' /proc/cpuinfo | wc -l`
+	[ -n "$nr_threads" ] || nr_threads=2
+	make -j$nr_threads -C $KERNEL_BUILD_DIR
 	# .config may change during compiling, update the one in source
 	### cat $KERNEL_BUILD_DIR/.config > config
 
