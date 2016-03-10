@@ -139,7 +139,7 @@ __build_kernel()
 	# Install kernel image
 	cp $KERNEL_BUILD_DIR/arch/x86/boot/bzImage $BOOT_INSTALL_DIR/$VMLINUZ_FILE
 	# Install modules
-	make modules_install -C $KERNEL_BUILD_DIR INSTALL_MOD_PATH=`pwd`/$VFS_SOURCE_DIR
+	make modules_install -C $KERNEL_BUILD_DIR INSTALL_MOD_PATH=`pwd`/$VFS_SOURCE_DIR INSTALL_MOD_STRIP=1
 
 	# Regenerate module dependencies after copying drivers
 	chroot_real $VFS_SOURCE_DIR depmod -a $KERNEL_RELEASE
