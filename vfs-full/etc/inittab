@@ -49,7 +49,7 @@ pr:12345:powerokwait:/sbin/shutdown -c "Power Restored; Shutdown Cancelled"
 5:2345:respawn:/sbin/mingetty tty5
 6:2345:respawn:/sbin/mingetty tty6
 
-#S0:12345:respawn:/sbin/agetty 115200 ttyS0
+S0:12345:respawn:/sbin/agetty 115200 ttyS0
 
 # Run xdm in runlevel 5
 x:5:respawn:/etc/X11/prefdm -nodaemon
