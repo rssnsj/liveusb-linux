@@ -158,38 +158,46 @@ do_build_all()
 	mkfs.ext2 -F -m 0 $rd_file
 	mkdir -p $rd_mnt
 	mount $rd_file $rd_mnt -o loop
+
 	(
 		cd $VFS_SOURCE_DIR
 		tar -c --exclude-vcs * | tar -x -C $rd_mnt
 
-		# Rebuild the empty directories
 		cd $rd_mnt
-		mkdir -p dev sys proc tmp var/run media
 
-		# Build /dev sub-directories
-		cd $rd_mnt/dev
-		mknod ram0 b 1 0
-		mknod ram1 b 1 1
-		mknod ram2 b 1 2
-		ln -s ram0 ramdisk
-		ln -s ram1 ram
-		mknod console c 5 1
-		mknod tty c 5 0
-		mknod tty0 c 4 0
-		mknod tty1 c 4 1
-		mknod tty2 c 4 2
-		mknod tty3 c 4 3
-		mknod tty4 c 4 4
-		mknod tty5 c 4 5
-		mknod null c 1 3
-		mknod ptmx c 5 2
-		mknod urandom c 1 9
-		mknod zero c 1 5
-		mkdir -p pts shm
+		# Recreate missing directories
+		mkdir -p dev sys proc var tmp media
+		mkdir -p var/run var/empty/sshd
+
+		# Create basic device files
+		(
+			cd $rd_mnt/dev
+			mknod ram0 b 1 0
+			mknod ram1 b 1 1
+			mknod ram2 b 1 2
+			ln -s ram0 ramdisk
+			ln -s ram1 ram
+			mknod console c 5 1
+			mknod tty c 5 0
+			mknod tty0 c 4 0
+			mknod tty1 c 4 1
+			mknod tty2 c 4 2
+			mknod tty3 c 4 3
+			mknod tty4 c 4 4
+			mknod tty5 c 4 5
+			mknod null c 1 3
+			mknod ptmx c 5 2
+			mknod urandom c 1 9
+			mknod zero c 1 5
+			mkdir -p pts shm
+		)
 
 		# Fix file permissions
-		cd $rd_mnt/etc/ssh
-		chmod 600 *_key
+		chmod 600 etc/ssh/*_key
+		chmod 755 var/empty/sshd
+
+		# Reset file owners as root
+		chown root:root . -R
 	)
 
 	umount $rd_mnt
