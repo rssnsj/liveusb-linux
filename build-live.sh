@@ -144,9 +144,7 @@ __build_kernel()
 	make modules_install -C $KERNEL_BUILD_DIR INSTALL_MOD_PATH=`pwd`/$VFS_SOURCE_DIR INSTALL_MOD_STRIP=1
 
 	# Regenerate module dependencies after copying drivers
-	chroot_real $VFS_SOURCE_DIR depmod -a $KERNEL_RELEASE
-	sleep 1
-	clean_chroot $VFS_SOURCE_DIR
+	chroot $VFS_SOURCE_DIR depmod -a $KERNEL_RELEASE
 }
 
 do_build_all()
