@@ -123,8 +123,8 @@ __build_kernel()
 	cat config > $KERNEL_BUILD_DIR/.config
 
 	local i
-	for i in 5 4 3 2 1; do
-		echo "Waiting ${i}s to build ..."
+	for i in 3 2 1; do
+		echo "Waiting ${i}s to compile kernel ..."
 		sleep 1
 	done
 
@@ -142,18 +142,21 @@ __build_kernel()
 	cp $KERNEL_BUILD_DIR/arch/x86/boot/bzImage $BOOT_INSTALL_DIR/$VMLINUZ_FILE
 	# Install modules
 	make modules_install -C $KERNEL_BUILD_DIR INSTALL_MOD_PATH=`pwd`/$VFS_SOURCE_DIR INSTALL_MOD_STRIP=1
+}
+
+__build_ramdisk()
+{
+	if ! [ "`id -u`" -eq 0 ]; then
+		echo "*** Ramdisk must be created with root privilege."
+		return 1
+	fi
 
 	# Regenerate module dependencies after copying drivers
 	chroot $VFS_SOURCE_DIR depmod -a $KERNEL_RELEASE
-}
 
-do_build_all()
-{
 	local rd_file=`pwd`/__ramdisk.img__
 	local rd_mnt=`pwd`/__ramdisk.mnt__
-	
-	__build_kernel
-	
+
 	dd if=/dev/zero of=$rd_file bs=1M count=64
 	mkfs.ext2 -F -m 0 $rd_file
 	mkdir -p $rd_mnt
@@ -204,6 +207,18 @@ do_build_all()
 	rmdir $rd_mnt
 	gzip -c $rd_file > $BOOT_INSTALL_DIR/$RAMDISK_FILE
 	rm -f $rd_file
+}
+
+do_build_all()
+{
+	__build_kernel
+
+	if [ "`id -u`" -eq 0 ]; then
+		__build_ramdisk
+	else
+		print_green "Sudo as root for building ramdisk ..."
+		sudo $0 __build_ramdisk
+	fi
 
 	# Write a menu.lst sample
 	mkdir -p $BOOT_INSTALL_DIR/grub
@@ -230,7 +245,7 @@ do_install_disk()
 	fi
 
 	local i
-	for i in 5 4 3 2 1; do
+	for i in 4 3 2 1; do
 		echo "Waiting ${i}s to install to $disk_dev ..."
 		sleep 1
 	done
@@ -302,6 +317,9 @@ do_cleanup()
 }
 
 case "$1" in
+	__build_ramdisk)
+		__build_ramdisk
+		;;
 	create)
 		do_build_all
 		;;
