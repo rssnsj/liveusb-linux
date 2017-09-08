@@ -1,0 +1,6 @@
+/boot
+/config
+/linux-*.tar.*
+/linux-*/
+/vfs-full/lib/firmware
+/vfs-full/lib/modules
