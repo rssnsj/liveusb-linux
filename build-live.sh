@@ -154,7 +154,7 @@ __build_ramdisk()
 	# Regenerate module dependencies after copying drivers
 	chroot $VFS_SOURCE_DIR depmod -a $KERNEL_RELEASE
 
-	local rd_file=`pwd`/__ramdisk.img__
+	local rd_file=`pwd`/ramdisk.img
 	local rd_mnt=`pwd`/__ramdisk.mnt__
 
 	dd if=/dev/zero of=$rd_file bs=1M count=64
