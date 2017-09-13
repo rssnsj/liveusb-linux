@@ -69,7 +69,13 @@ __prepare_kernel_dir()
 	if ! [ -d $KERNEL_BUILD_DIR ]; then
 		local kernel_tar=`basename "$KERNEL_DOWNLOAD_URL"`
 		if ! [ -f "$kernel_tar" ]; then
-			wget $KERNEL_DOWNLOAD_URL -O $kernel_tar
+			if [ -f /var/dl/$kernel_tar ]; then
+				ln -svf /var/dl/$kernel_tar ./
+			elif [ -f ../$kernel_tar ]; then
+				ln -svf ../$kernel_tar ./
+			else
+				wget $KERNEL_DOWNLOAD_URL -O $kernel_tar
+			fi
 		fi
 
 		local tar_opts=
