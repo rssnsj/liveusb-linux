@@ -13,11 +13,14 @@ Host settings for virtual networking
     sudo ifconfig tap0 up
     sudo brctl addif br-wan tap0   # attach to a bridge if necessary
 
-Boot guest system
+Boot the guest system
 
     # Boot in ramdisk mode
     ./vmlinuz-4.1.18-liveusb mem=256m initrd=ramdisk.img-4.1.18-liveusb root=/dev/ram0 eth0=tuntap,tap0
     
-    # Boot in ramdisk mode with an empty 1G virtual disk
+    # Boot in ramdisk mode with an empty 1G disk image
     truncate virtual-disk.img -s 1G
     ./vmlinuz-4.1.18-liveusb mem=256m initrd=ramdisk.img-4.1.18-liveusb root=/dev/ram0 ubda=virtual-disk.img eth0=tuntap,tap0
+
+    # Boot with a pre-created disk image
+    ./vmlinuz-4.1.18-liveusb mem=256m ubda=virtual-disk.img root=/dev/ubda1 eth0=tuntap,tap0
