@@ -109,6 +109,8 @@ __prepare_kernel_dir()
 	# Set 'ARCH=um' when compiling as UMLinux
 	if grep '\<CONFIG_UML=y\>' config >/dev/null; then
 		export ARCH=um
+	else
+		unset ARCH
 	fi
 }
 
