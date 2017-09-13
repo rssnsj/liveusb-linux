@@ -105,6 +105,11 @@ __prepare_kernel_dir()
 		echo "*** Please create symbolic link 'config' to one of the config files."
 		exit 1
 	fi
+
+	# Set 'ARCH=um' when compiling as UMLinux
+	if grep '\<CONFIG_UML=y\>' config >/dev/null; then
+		export ARCH=um
+	fi
 }
 
 do_menuconfig()
@@ -145,7 +150,11 @@ __build_kernel()
 	# Compile
 	make -C $KERNEL_BUILD_DIR
 	# Install kernel image
-	cp $KERNEL_BUILD_DIR/arch/x86/boot/bzImage $BOOT_INSTALL_DIR/$VMLINUZ_FILE
+	if [ "$ARCH" != um ]; then
+		cp $KERNEL_BUILD_DIR/arch/x86/boot/bzImage $BOOT_INSTALL_DIR/$VMLINUZ_FILE
+	else
+		cp $KERNEL_BUILD_DIR/linux $BOOT_INSTALL_DIR/$VMLINUZ_FILE
+	fi
 	# Install modules
 	make modules_install -C $KERNEL_BUILD_DIR INSTALL_MOD_PATH=`pwd`/$VFS_SOURCE_DIR INSTALL_MOD_STRIP=1
 }
@@ -226,9 +235,18 @@ do_build_all()
 		sudo $0 __build_ramdisk
 	fi
 
-	# Write a menu.lst sample
-	mkdir -p $BOOT_INSTALL_DIR/grub
-	( generate_grub_menu ) > $BOOT_INSTALL_DIR/grub/menu.lst
+	if [ "$ARCH" != um ]; then
+		# Write a menu.lst sample
+		mkdir -p $BOOT_INSTALL_DIR/grub
+		( generate_grub_menu ) > $BOOT_INSTALL_DIR/grub/menu.lst
+	else
+		# Write a script for testing the kernel with a ramdisk
+		cat > $BOOT_INSTALL_DIR/start-umlinux.sh <<EOF
+#!/bin/sh -x
+exec ./$VMLINUZ_FILE mem=256m initrd=$RAMDISK_FILE root=/dev/ram0 "\$@"
+EOF
+		chmod +x $BOOT_INSTALL_DIR/start-umlinux.sh
+	fi
 
 	print_green "Built successfully."
 }
