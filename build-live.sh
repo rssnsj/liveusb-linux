@@ -216,6 +216,14 @@ __build_ramdisk()
 		chmod 600 etc/ssh/*_key
 		chmod 755 var/empty/sshd
 
+		if [ "$ARCH" != um ]; then
+			# Remove console tty0 for regular system
+			sed -i '/^0:.*\<tty0/d' etc/inittab
+		else
+			# Remove tty1-6, ttyS0 for UMLinux
+			sed -i '/^[1-6]:.*\<tty[1-6]/d; /^S0:.*ttyS0/d' etc/inittab
+		fi
+
 		# Reset file owners as root
 		chown root:root . -R
 	)
@@ -234,7 +242,7 @@ do_build_all()
 		__build_ramdisk
 	else
 		print_green "Sudo as root for building ramdisk ..."
-		sudo $0 __build_ramdisk
+		sudo ARCH=$ARCH $0 __build_ramdisk
 	fi
 
 	if [ "$ARCH" != um ]; then
