@@ -63,26 +63,6 @@ EOF
 
 }
 
-generate_umlinux_script()
-{
-	cat <<EOF
-#!/bin/sh
-
-if [ -z "\$1" ]; then
-	echo "-------------------------------------------------------"
-	echo "You may enable networking for the virtual machine by:"
-	echo " tunctl -u <user>"
-	echo " ... eth0=tuntap,tap0"
-	echo "-------------------------------------------------------"
-	read -t 6 -p "Press ENTER to continue... "
-fi
-
-exec ./$VMLINUZ_FILE mem=256m initrd=$RAMDISK_FILE root=/dev/ram0 "\$@"
-
-EOF
-
-}
-
 __prepare_kernel_dir()
 {
 	# Check if kernel source exists, if not download it
@@ -269,10 +249,6 @@ do_build_all()
 		# Write a menu.lst sample
 		mkdir -p $BOOT_INSTALL_DIR/grub
 		( generate_grub_menu ) > $BOOT_INSTALL_DIR/grub/menu.lst
-	else
-		# Write a script for testing the kernel with a ramdisk
-		( generate_umlinux_script ) > $BOOT_INSTALL_DIR/start-umlinux.sh
-		chmod +x $BOOT_INSTALL_DIR/start-umlinux.sh
 	fi
 
 	print_green "Built successfully."
