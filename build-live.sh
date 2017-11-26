@@ -6,7 +6,7 @@ KERNEL_DOWNLOAD_URL="https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.1.18.t
 
 VFS_SOURCE_DIR=vfs-full
 BOOT_INSTALL_DIR=boot
-KERNEL_BUILD_DIR=linux-$KERNEL_VERSION
+KERNEL_BUILD_DIR=`basename "$KERNEL_DOWNLOAD_URL" | sed 's/\.tar\>.*$//'`
 VMLINUZ_FILE=vmlinuz-$KERNEL_RELEASE
 RAMDISK_FILE=ramdisk.img-$KERNEL_RELEASE
 
@@ -18,6 +18,7 @@ print_green()
 		*) echo "$@";;
 	esac
 }
+
 chroot_real()
 {
 	local dir="$1"
