@@ -69,14 +69,9 @@ __prepare_kernel_dir()
 	# Check if kernel source exists, if not download it
 	if ! [ -d $KERNEL_BUILD_DIR ]; then
 		local kernel_tar=`basename "$KERNEL_DOWNLOAD_URL"`
-		if ! [ -f "$kernel_tar" ]; then
-			if [ -f /var/dl/$kernel_tar ]; then
-				ln -svf /var/dl/$kernel_tar ./
-			elif [ -f ../$kernel_tar ]; then
-				ln -svf ../$kernel_tar ./
-			else
-				wget $KERNEL_DOWNLOAD_URL -O $kernel_tar
-			fi
+		if ! [ -f dl/$kernel_tar ]; then
+			mkdir -p dl
+			wget $KERNEL_DOWNLOAD_URL -O dl/$kernel_tar
 		fi
 
 		local tar_opts=
@@ -97,7 +92,7 @@ __prepare_kernel_dir()
 		esac
 
 		print_green "Extracting the kernel ..."
-		tar $tar_opts $kernel_tar
+		tar $tar_opts dl/$kernel_tar
 		print_green "Done."
 	fi
 
@@ -332,10 +327,13 @@ do_cleanup()
 	( cd $VFS_SOURCE_DIR; rm -rf lib/firmware lib/modules )
 
 	if [ -d $KERNEL_BUILD_DIR ]; then
+		# YES by default
 		local cf
-		read -p "Delete kernel source directory '$KERNEL_BUILD_DIR' [yes/No]? " cf
+		read -p "Delete kernel source directory '$KERNEL_BUILD_DIR' [Y/n]? " cf
 		case "$cf" in
-			yes|YES)
+			n*|N*)
+				;;
+			*)
 				echo "Deleting $KERNEL_BUILD_DIR ..."
 				rm -rf $KERNEL_BUILD_DIR
 				echo "Done."
