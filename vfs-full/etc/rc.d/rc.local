@@ -11,4 +11,6 @@ udevtrigger
 mkdir -p /dev/pts
 mount devpts /dev/pts -t devpts
 
+iptables-restore < /etc/sysconfig/iptables
+
 exit 0
