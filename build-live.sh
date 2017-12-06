@@ -170,7 +170,7 @@ __build_ramdisk()
 	local rd_file=`pwd`/ramdisk.img
 	local rd_mnt=`pwd`/__ramdisk.mnt__
 
-	dd if=/dev/zero of=$rd_file bs=1M count=64
+	dd if=/dev/zero of=$rd_file bs=1M count=54
 	mkfs.ext2 -F -m 0 $rd_file
 	mkdir -p $rd_mnt
 	mount $rd_file $rd_mnt -o loop
