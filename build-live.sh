@@ -137,10 +137,8 @@ __build_kernel()
 		sleep 1
 	done
 
-	# Compile the kernel and selected drivers using 8 threads
-	local nr_threads=`grep '^processor' /proc/cpuinfo | wc -l`
-	[ -n "$nr_threads" ] || nr_threads=2
-	make -j$nr_threads -C $KERNEL_BUILD_DIR
+	# Inherits jobserver parameters from parent Makefile
+	make -C $KERNEL_BUILD_DIR
 	# .config may change during compiling, update the one in source
 	### cat $KERNEL_BUILD_DIR/.config > config
 

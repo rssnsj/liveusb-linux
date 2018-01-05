@@ -1,5 +1,5 @@
 create:
-	@./build-live.sh create
+	@MAKE=$(MAKE) ./build-live.sh create
 
 install:
 	@if [ -z "$(D)" ]; then \
@@ -8,7 +8,7 @@ install:
 	  echo ""; \
 	  exit 1; \
 	 fi
-	@./build-live.sh install $(D)
+	@MAKE=$(MAKE) ./build-live.sh install $(D)
 
 menuconfig:
 	@./build-live.sh menuconfig
