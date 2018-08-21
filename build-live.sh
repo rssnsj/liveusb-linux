@@ -19,34 +19,6 @@ print_green()
 	esac
 }
 
-chroot_real()
-{
-	local dir="$1"
-	shift 1
-	(
-		cd $dir || exit 1
-		if [ ! -d proc/net ]; then
-			mkdir -p dev sys proc tmp
-			mount --bind /proc proc
-			mount --bind /dev dev
-			#mount devpts2 dev/pts -t devpts
-			#mount tmpfs2 dev/shm -t tmpfs
-			mount --bind /sys sys
-		fi
-		exec chroot . "$@"
-	)
-}
-
-clean_chroot()
-{
-	local dir="$1"
-	(
-		cd $dir || exit 1
-		umount dev/pts dev/shm 2>/dev/null || :
-		umount sys dev proc || :
-	)
-}
-
 generate_grub_menu()
 {
 	cat <<EOF
@@ -142,69 +114,34 @@ __build_kernel()
 	# .config may change during compiling, update the one in source
 	### cat $KERNEL_BUILD_DIR/.config > config
 
-	mkdir -p $BOOT_INSTALL_DIR
-	# Compile
-	make -C $KERNEL_BUILD_DIR
 	# Install kernel image
 	if [ "$ARCH" != um ]; then
 		cp $KERNEL_BUILD_DIR/arch/x86/boot/bzImage $BOOT_INSTALL_DIR/$VMLINUZ_FILE
 	else
 		cp $KERNEL_BUILD_DIR/linux $BOOT_INSTALL_DIR/$VMLINUZ_FILE
 	fi
+
 	# Install modules
+	rm -rf ./$VFS_SOURCE_DIR/lib/modules/$KERNEL_RELEASE
 	make modules_install -C $KERNEL_BUILD_DIR INSTALL_MOD_PATH=`pwd`/$VFS_SOURCE_DIR INSTALL_MOD_STRIP=1
 }
 
 __build_ramdisk()
 {
-	if ! [ "`id -u`" -eq 0 ]; then
-		echo "*** Ramdisk must be created with root privilege."
-		return 1
-	fi
+	rm -rf rootdir
+	mkdir -p rootdir
 
-	# Regenerate module dependencies after copying drivers
-	chroot $VFS_SOURCE_DIR depmod -a $KERNEL_RELEASE
-
-	local rd_file=`pwd`/ramdisk.img
-	local rd_mnt=`pwd`/__ramdisk.mnt__
-
-	dd if=/dev/zero of=$rd_file bs=1M count=44
-	mkfs.ext2 -F -m 0 $rd_file
-	mkdir -p $rd_mnt
-	mount $rd_file $rd_mnt -o loop
+	( cd $VFS_SOURCE_DIR && tar -c --exclude-vcs * ) | tar -x -C rootdir
 
 	(
-		cd $VFS_SOURCE_DIR
-		tar -c --exclude-vcs * | tar -x -C $rd_mnt
-
-		cd $rd_mnt
+		cd rootdir
 
 		# Recreate missing directories
 		mkdir -p dev sys proc var tmp media
 		mkdir -p var/run var/empty/sshd
-
-		# Create basic device files
-		(
-			cd $rd_mnt/dev
-			mknod ram0 b 1 0
-			mknod ram1 b 1 1
-			mknod ram2 b 1 2
-			ln -s ram0 ramdisk
-			ln -s ram1 ram
-			mknod console c 5 1
-			mknod tty c 5 0
-			mknod tty0 c 4 0
-			mknod tty1 c 4 1
-			mknod tty2 c 4 2
-			mknod tty3 c 4 3
-			mknod tty4 c 4 4
-			mknod tty5 c 4 5
-			mknod null c 1 3
-			mknod ptmx c 5 2
-			mknod urandom c 1 9
-			mknod zero c 1 5
-			mkdir -p pts shm
-		)
+		mkdir -p dev/pts dev/shm
+		ln -s ram0 dev/ramdisk
+		ln -s ram1 dev/ram
 
 		# Fix file permissions
 		chmod 600 etc/ssh/*_key
@@ -217,27 +154,36 @@ __build_ramdisk()
 			# Remove tty1-6, ttyS0 for UMLinux
 			sed -i '/^[1-6]:.*\<tty[1-6]/d; /^S0:.*ttyS0/d' etc/inittab
 		fi
-
-		# Reset file owners as root
-		chown root:root . -R
 	)
 
-	umount $rd_mnt
-	rmdir $rd_mnt
-	gzip -c $rd_file > $BOOT_INSTALL_DIR/$RAMDISK_FILE
-	rm -f $rd_file
+	cat > devicetable <<EOF
+# name       type mode uid gid major minor start inc count
+/dev/ram      b   644  0    0    1    0    0    1    3
+/dev/console  c   644  0    0    5    1    0    0    -
+/dev/tty      c   666  0    0    5    0    0    0    -
+/dev/tty      c   666  0    0    4    0    0    1    6
+/dev/null     c   666  0    0    1    3    0    0    -
+/dev/ptmx     c   644  0    0    5    2    0    0    -
+/dev/urandom  c   666  0    0    1    9    0    0    -
+/dev/zero     c   666  0    0    1    5    0    0    -
+EOF
+
+	genext2fs -b 45056 -d rootdir -i 4096 -m 0 -U -D devicetable imgfile
+	gzip -c imgfile > $BOOT_INSTALL_DIR/$RAMDISK_FILE
+
+	rm -f imgfile devicetable
+	rm -rf rootdir
 }
 
 do_build_all()
 {
+	mkdir -p $BOOT_INSTALL_DIR
+
+	print_green "Building Linux kernel ..."
 	__build_kernel
 
-	if [ "`id -u`" -eq 0 ]; then
-		__build_ramdisk
-	else
-		print_green "Sudo as root for building ramdisk ..."
-		sudo ARCH=$ARCH $0 __build_ramdisk
-	fi
+	print_green "Building the ramdisk ..."
+	__build_ramdisk
 
 	if [ "$ARCH" != um ]; then
 		# Write a menu.lst sample
@@ -277,11 +223,6 @@ do_install_disk()
 	mkdir -p $VFS_SOURCE_DIR/__disk__/boot
 	cp -v $BOOT_INSTALL_DIR/$VMLINUZ_FILE $BOOT_INSTALL_DIR/$RAMDISK_FILE $VFS_SOURCE_DIR/__disk__/boot/
 
-	# Install GRUB
-	#chroot_real $VFS_SOURCE_DIR grub-install `echo $disk_dev | sed 's/[0-9]\+$//'` --root-directory=/__disk__
-	#sleep 1
-	#clean_chroot $VFS_SOURCE_DIR
-
 	if ! [ -f $VFS_SOURCE_DIR/__disk__/boot/grub/menu.lst ]; then
 		mkdir -p $VFS_SOURCE_DIR/__disk__/boot/grub
 		( generate_grub_menu ) > $VFS_SOURCE_DIR/__disk__/boot/grub/menu.lst
@@ -309,13 +250,6 @@ umount $VFS_SOURCE_DIR/media
 
 EOF
 
-}
-
-do_enter_chroot()
-{
-	chroot_real $VFS_SOURCE_DIR bash || :
-	sleep 0.2
-	clean_chroot $VFS_SOURCE_DIR
 }
 
 do_cleanup()
@@ -356,16 +290,12 @@ case "$1" in
 	install)
 		do_install_disk $2
 		;;
-	chroot)
-		do_enter_chroot
-		;;
 	*)
 		echo "Bootable LiveUSB Linux creator."
 		echo "Usage:"
 		echo "  $0 create                build kernel image and rootfs ramdisk"
 		echo "  $0 menuconfig            show menuconfig for updating kernel configuration"
 		echo "  $0 install /dev/sdxn     write to your flash disk"
-		echo "  $0 chroot                chroot to the target filesystem"
 		echo "  $0 clean                 cleanup workspace"
 		echo "  $0                       show help"
 		;;
