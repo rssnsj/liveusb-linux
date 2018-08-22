@@ -103,6 +103,8 @@ __build_kernel()
 	# Use the config file
 	cat config > $KERNEL_BUILD_DIR/.config
 
+	print_green "Building Linux kernel ..."
+
 	local i
 	for i in 3 2 1; do
 		echo "Waiting ${i}s to compile kernel ..."
@@ -122,12 +124,14 @@ __build_kernel()
 	fi
 
 	# Install modules
-	rm -rf ./$VFS_SOURCE_DIR/lib/modules/$KERNEL_RELEASE
+	rm -rf ./$VFS_SOURCE_DIR/lib/modules ./$VFS_SOURCE_DIR/lib/firmware
 	make modules_install -C $KERNEL_BUILD_DIR INSTALL_MOD_PATH=`pwd`/$VFS_SOURCE_DIR INSTALL_MOD_STRIP=1
 }
 
 __build_ramdisk()
 {
+	print_green "Building the ramdisk ..."
+
 	rm -rf rootdir
 	mkdir -p rootdir
 
@@ -179,10 +183,8 @@ do_build_all()
 {
 	mkdir -p $BOOT_INSTALL_DIR
 
-	print_green "Building Linux kernel ..."
 	__build_kernel
 
-	print_green "Building the ramdisk ..."
 	__build_ramdisk
 
 	if [ "$ARCH" != um ]; then
@@ -191,65 +193,7 @@ do_build_all()
 		( generate_grub_menu ) > $BOOT_INSTALL_DIR/grub/menu.lst
 	fi
 
-	print_green "Built successfully."
-}
-
-do_install_disk()
-{
-	local disk_dev="$1"
-
-	if [ -z "$disk_dev" ]; then
-		echo "*** Requiring target disk partition."
-		exit 1
-	elif ! [ -b "$disk_dev" ]; then
-		echo "*** '$disk_dev' is not a valid block device."
-		exit 1
-	fi
-
-	if ! [ -f $BOOT_INSTALL_DIR/$VMLINUZ_FILE -a -f $BOOT_INSTALL_DIR/$RAMDISK_FILE ]; then
-		echo "*** Missing kernel or ramdisk images. Perform the 'create' operation before 'install'."
-		exit 1
-	fi
-
-	local i
-	for i in 4 3 2 1; do
-		echo "Waiting ${i}s to install to $disk_dev ..."
-		sleep 1
-	done
-
-	mkdir -p $VFS_SOURCE_DIR/__disk__
-	mount $disk_dev $VFS_SOURCE_DIR/__disk__
-	print_green "Mounted '$disk_dev' to '$VFS_SOURCE_DIR/__disk__'."
-	mkdir -p $VFS_SOURCE_DIR/__disk__/boot
-	cp -v $BOOT_INSTALL_DIR/$VMLINUZ_FILE $BOOT_INSTALL_DIR/$RAMDISK_FILE $VFS_SOURCE_DIR/__disk__/boot/
-
-	if ! [ -f $VFS_SOURCE_DIR/__disk__/boot/grub/menu.lst ]; then
-		mkdir -p $VFS_SOURCE_DIR/__disk__/boot/grub
-		( generate_grub_menu ) > $VFS_SOURCE_DIR/__disk__/boot/grub/menu.lst
-	fi
-
-	umount $VFS_SOURCE_DIR/__disk__
-	rmdir $VFS_SOURCE_DIR/__disk__
-	print_green "Unmounted '$disk_dev' from '$VFS_SOURCE_DIR/__disk__'."
-
-	echo
-	print_green ">>> You may have to add these options to '/boot/grub/menu.lst' of your flash disk:"
-	echo
-	generate_grub_menu
-	echo
-	print_green ">>> Then run:"
-
-	cat <<EOF
-
-mkdir -p $VFS_SOURCE_DIR/media
-mount $disk_dev $VFS_SOURCE_DIR/media
-$0 chroot
-grub-install `echo $disk_dev | sed 's/[0-9]\+$//'` --root-directory=/media
-exit
-umount $VFS_SOURCE_DIR/media
-
-EOF
-
+	print_green "Done."
 }
 
 do_cleanup()
@@ -275,10 +219,7 @@ do_cleanup()
 }
 
 case "$1" in
-	__build_ramdisk)
-		__build_ramdisk
-		;;
-	create)
+	build_all)
 		do_build_all
 		;;
 	menuconfig)
@@ -287,15 +228,17 @@ case "$1" in
 	clean)
 		do_cleanup
 		;;
-	install)
-		do_install_disk $2
+	build_ramdisk)
+		__build_ramdisk
+		;;
+	build_kernel)
+		__build_kernel
 		;;
 	*)
 		echo "Bootable LiveUSB Linux creator."
 		echo "Usage:"
-		echo "  $0 create                build kernel image and rootfs ramdisk"
+		echo "  $0 build                 build kernel image and rootfs ramdisk"
 		echo "  $0 menuconfig            show menuconfig for updating kernel configuration"
-		echo "  $0 install /dev/sdxn     write to your flash disk"
 		echo "  $0 clean                 cleanup workspace"
 		echo "  $0                       show help"
 		;;
