@@ -1,8 +1,8 @@
 #!/bin/bash -e
 
-KERNEL_VERSION=4.1.18
+KERNEL_VERSION=3.18.67
 KERNEL_RELEASE=$KERNEL_VERSION-liveusb
-KERNEL_DOWNLOAD_URL="https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.1.18.tar.xz"
+KERNEL_DOWNLOAD_URL="https://cdn.kernel.org/pub/linux/kernel/v3.x/linux-3.18.67.tar.xz"
 
 VFS_SOURCE_DIR=vfs-full
 BOOT_INSTALL_DIR=boot
