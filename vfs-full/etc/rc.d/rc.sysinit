@@ -235,7 +235,7 @@ fi
 # Print a text banner.
 echo -en $"\t\tWelcome to "
 if [ "$BOOTUP" = "color" ]; then echo -en "\\033[0;31m"; fi
-echo -en "Mini Linux"
+echo -en "LiveUSB Linux"
 if [ "$BOOTUP" = "color" ]; then echo -en "\\033[0;39m"; fi
 echo
 
