@@ -196,9 +196,11 @@ do_build_all()
 
 do_cleanup()
 {
-	rm -rf $BOOT_INSTALL_DIR
+	rm -rf $BOOT_INSTALL_DIR/boot/grub/grub.cfg \
+		$BOOT_INSTALL_DIR/boot/vmlinuz-* \
+		$BOOT_INSTALL_DIR/boot/ramdisk.img-* 
 
-	( cd $VFS_SOURCE_DIR; rm -rf lib/firmware lib/modules )
+	( cd $VFS_SOURCE_DIR && rm -rf lib/firmware lib/modules )
 
 	if [ -d $KERNEL_BUILD_DIR ]; then
 		# YES by default
