@@ -196,9 +196,9 @@ do_build_all()
 
 do_cleanup()
 {
-	rm -rf $BOOT_INSTALL_DIR/boot/grub/grub.cfg \
-		$BOOT_INSTALL_DIR/boot/vmlinuz-* \
-		$BOOT_INSTALL_DIR/boot/ramdisk.img-* 
+	rm -rf $BOOT_INSTALL_DIR/grub/grub.cfg \
+		$BOOT_INSTALL_DIR/vmlinuz-* \
+		$BOOT_INSTALL_DIR/ramdisk.img-* 
 
 	( cd $VFS_SOURCE_DIR && rm -rf lib/firmware lib/modules )
 
@@ -207,9 +207,7 @@ do_cleanup()
 		local cf
 		read -p "Delete kernel source directory '$KERNEL_BUILD_DIR' [Y/n]? " cf
 		case "$cf" in
-			n*|N*)
-				;;
-			*)
+			y*|Y*|'')
 				echo "Deleting $KERNEL_BUILD_DIR ..."
 				rm -rf $KERNEL_BUILD_DIR
 				echo "Done."
