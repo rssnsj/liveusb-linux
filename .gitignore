@@ -1,4 +1,6 @@
-/boot
+/bin/boot/vmlinuz-*
+/bin/boot/ramdisk.img-*
+/bin/boot/grub/grub.cfg
 /config
 /dl
 /linux-*/

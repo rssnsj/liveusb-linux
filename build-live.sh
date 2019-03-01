@@ -5,7 +5,7 @@ KERNEL_RELEASE=$KERNEL_VERSION-liveusb
 KERNEL_DOWNLOAD_URL="https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.1.18.tar.xz"
 
 VFS_SOURCE_DIR=vfs-full
-BOOT_INSTALL_DIR=boot
+BOOT_INSTALL_DIR=bin/boot
 KERNEL_BUILD_DIR=`basename "$KERNEL_DOWNLOAD_URL" | sed 's/\.tar\>.*$//'`
 VMLINUZ_FILE=vmlinuz-$KERNEL_RELEASE
 RAMDISK_FILE=ramdisk.img-$KERNEL_RELEASE
@@ -21,19 +21,18 @@ print_green()
 
 generate_grub_menu()
 {
-	cat <<EOF
-default 0
-timeout 5
+	mkdir -p $BOOT_INSTALL_DIR/grub
+	cat > $BOOT_INSTALL_DIR/grub/grub.cfg <<EOF
+set default=0
+set timeout=5
+# set root='(hd0,1)'
 
-color  cyan/blue white/blue
-
-title   Linux - $KERNEL_RELEASE (ramdisk)
-root    (hd0,0)
-kernel  /boot/$VMLINUZ_FILE root=/dev/ram0 rw
-initrd  /boot/$RAMDISK_FILE
+menuentry "Linux - $KERNEL_RELEASE (ramdisk)" {
+	linux /boot/$VMLINUZ_FILE root=/dev/ram0 rw
+	initrd /boot/$RAMDISK_FILE
+}
 
 EOF
-
 }
 
 __prepare_kernel_dir()
@@ -188,9 +187,8 @@ do_build_all()
 	__build_ramdisk
 
 	if [ "$ARCH" != um ]; then
-		# Write a menu.lst sample
-		mkdir -p $BOOT_INSTALL_DIR/grub
-		( generate_grub_menu ) > $BOOT_INSTALL_DIR/grub/menu.lst
+		# Write a grub.cfg sample
+		generate_grub_menu
 	fi
 
 	print_green "Done."
