@@ -4,5 +4,5 @@
 /config
 /dl
 /linux-*/
-/vfs-full/lib/firmware
-/vfs-full/lib/modules
+/vfs-*/lib/firmware
+/vfs-*/lib/modules
