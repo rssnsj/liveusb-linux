@@ -21,8 +21,10 @@ print_green()
 
 generate_grub_menu()
 {
-	mkdir -p $BOOT_INSTALL_DIR/grub
-	cat > $BOOT_INSTALL_DIR/grub/grub.cfg <<EOF
+	if [ "$ARCH" != um ]; then
+		# Write a grub.cfg example
+		mkdir -p $BOOT_INSTALL_DIR/grub
+		cat > $BOOT_INSTALL_DIR/grub/grub.cfg <<EOF
 set default=0
 set timeout=5
 # set root='(hd0,1)'
@@ -33,6 +35,14 @@ menuentry "Linux - $KERNEL_RELEASE (ramdisk)" {
 }
 
 EOF
+	else
+		# Write a boot script example
+		cat > $BOOT_INSTALL_DIR/boot-initrd.sh <<EOF
+#!/bin/sh -x
+exec ./$VMLINUZ_FILE mem=192m initrd=$RAMDISK_FILE root=/dev/ram0 eth0=tuntap,tap0,00:ab:ab:ab:ab:ba
+EOF
+		chmod +x $BOOT_INSTALL_DIR/boot-initrd.sh
+	fi
 }
 
 __prepare_kernel_dir()
@@ -188,10 +198,8 @@ do_build_all()
 
 	__build_ramdisk
 
-	if [ "$ARCH" != um ]; then
-		# Write a grub.cfg sample
-		generate_grub_menu
-	fi
+	# Write a grub.cfg sample
+	generate_grub_menu
 
 	print_green "Done."
 }

@@ -1,6 +1,7 @@
 /bin/boot/vmlinuz-*
 /bin/boot/ramdisk.img-*
 /bin/boot/grub/grub.cfg
+/bin/boot/boot-initrd.sh
 /config
 /vfs
 /dl
