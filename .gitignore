@@ -2,6 +2,7 @@
 /bin/boot/ramdisk.img-*
 /bin/boot/grub/grub.cfg
 /config
+/vfs
 /dl
 /linux-*/
 /vfs-*/lib/firmware

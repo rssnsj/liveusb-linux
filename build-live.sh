@@ -4,7 +4,7 @@ KERNEL_VERSION=4.1.18
 KERNEL_RELEASE=$KERNEL_VERSION-liveusb
 KERNEL_DOWNLOAD_URL="https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.1.18.tar.xz"
 
-VFS_SOURCE_DIR=vfs-i386
+VFS_SOURCE_DIR=vfs
 BOOT_INSTALL_DIR=bin/boot
 KERNEL_BUILD_DIR=`basename "$KERNEL_DOWNLOAD_URL" | sed 's/\.tar\>.*$//'`
 VMLINUZ_FILE=vmlinuz-$KERNEL_RELEASE
@@ -68,8 +68,10 @@ __prepare_kernel_dir()
 	fi
 
 	# Check symlink: config -> config-x.x.x-xxx
-	if ! [ -L config ]; then
-		echo "*** Please create symbolic link 'config' to one of the config files."
+	if ! [ -L config -a -L vfs ]; then
+		echo "*** Please create the following symbolic link:"
+		echo "***  config: to one of the kernel configuration files"
+		echo "***  vfs: to 'vfs-i386' or 'vfs-amd64'"
 		exit 1
 	fi
 
@@ -200,7 +202,7 @@ do_cleanup()
 		$BOOT_INSTALL_DIR/vmlinuz-* \
 		$BOOT_INSTALL_DIR/ramdisk.img-* 
 
-	( cd $VFS_SOURCE_DIR && rm -rf lib/firmware lib/modules )
+	rm -rf vfs-*/lib/firmware vfs-*/lib/modules
 
 	if [ -d $KERNEL_BUILD_DIR ]; then
 		# YES by default
