@@ -4,7 +4,7 @@ KERNEL_VERSION=4.1.18
 KERNEL_RELEASE=$KERNEL_VERSION-liveusb
 KERNEL_DOWNLOAD_URL="https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.1.18.tar.xz"
 
-VFS_SOURCE_DIR=vfs-full
+VFS_SOURCE_DIR=vfs-i386
 BOOT_INSTALL_DIR=bin/boot
 KERNEL_BUILD_DIR=`basename "$KERNEL_DOWNLOAD_URL" | sed 's/\.tar\>.*$//'`
 VMLINUZ_FILE=vmlinuz-$KERNEL_RELEASE
