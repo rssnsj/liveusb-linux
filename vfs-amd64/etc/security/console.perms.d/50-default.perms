@@ -1,0 +1,63 @@
+# device classes -- these are shell-style globs
+<floppy>=/dev/fd[0-1]* \
+	 /dev/floppy* /mnt/floppy*
+<sound>=/dev/dsp* /dev/audio* /dev/midi* \
+	/dev/mixer* /dev/sequencer* \
+	/dev/sound/* /dev/beep \
+	/dev/snd/* /dev/adsp*
+<cdrom>=/dev/cdrom* /dev/cdroms/* /dev/cdwriter* /mnt/cdrom*
+<pilot>=/dev/pilot
+<jaz>=/mnt/jaz*
+<zip>=/mnt/pocketzip* /mnt/zip* /dev/zip*
+<ls120>=/dev/ls120 /mnt/ls120*
+<scanner>=/dev/scanner* /dev/usb/scanner*
+<rio500>=/dev/usb/rio500
+<camera>=/mnt/camera* /dev/usb/dc2xx* /dev/usb/mdc800*
+<memstick>=/mnt/memstick*
+<flash>=/mnt/flash* /dev/flash*
+<diskonkey>=/mnt/diskonkey*
+<rem_ide>=/mnt/microdrive*
+<fb>=/dev/fb /dev/fb[0-9]* \
+     /dev/fb/*
+<kbd>=/dev/kbd
+<joystick>=/dev/js[0-9]*
+<v4l>=/dev/video* /dev/radio* /dev/winradio* /dev/vtx* /dev/vbi* \
+      /dev/video/*
+<gpm>=/dev/gpmctl
+<dri>=/dev/nvidia* /dev/3dfx* /dev/dri/card*
+<mainboard>=/dev/apm_bios
+<pmu>=/dev/pmu
+<bluetooth>=/dev/rfcomm*
+<raw1394>=/dev/raw1394
+<irda>=/dev/ircomm*
+<dvb>=/dev/dvb/adapter*/*
+
+# permission definitions
+<console>  0660 <floppy>     0660 root.floppy
+<console>  0600 <sound>      0600 root
+<console>  0600 <cdrom>      0660 root.disk
+<console>  0600 <pilot>      0660 root.uucp
+<console>  0600 <jaz>        0660 root.disk
+<console>  0600 <zip>        0660 root.disk
+<console>  0600 <ls120>      0660 root.disk
+<console>  0600 <scanner>    0600 root
+<console>  0600 <camera>     0600 root.disk
+<console>  0600 <memstick>   0600 root.disk
+<console>  0600 <flash>      0600 root.disk
+<console>  0600 <diskonkey>  0660 root.disk
+<console>  0600 <rem_ide>    0660 root.disk
+<console>  0600 <fb>         0600 root
+<console>  0600 <kbd>        0600 root
+<console>  0600 <joystick>   0600 root
+<console>  0600 <v4l>        0600 root
+<console>  0700 <gpm>	     0700 root
+<console>  0600 <mainboard>  0600 root
+<console>  0600 <rio500>     0600 root
+<console>  0600 <pmu>        0600 root
+<console>  0600 <bluetooth>  0600 root
+<console>  0600 <raw1394>    0600 root
+<console>  0600 <irda>       0600 root
+<console>  0600 <dvb>        0600 root
+
+<xconsole> 0600 /dev/console 0600 root.root
+<console>  0600 <dri>	     0600 root

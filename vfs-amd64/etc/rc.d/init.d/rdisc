@@ -1,0 +1,81 @@
+#!/bin/bash
+#
+# $Id: rdisc,v 1.5 2005/04/05 10:06:01 bastian Exp $
+#
+# rdisc:        Starts the rdisc Daemon
+#
+# chkconfig: - 41 89
+# description: This is a daemon which discovers routers on the local subnet.
+# processname: rdisc
+# config: /etc/sysconfig/rdisc
+
+# Source function library.
+. /etc/init.d/functions
+. /etc/sysconfig/network
+
+#
+# Set default options.  Override the defaults and define 
+# custom options in /etc/sysconfig/rdisc
+#
+RDISCOPTS="-s"
+[ -f /etc/sysconfig/rdisc ] && . /etc/sysconfig/rdisc
+
+
+# Check that networking is configured.
+[ ${NETWORKING} = "no" ] && exit 0
+
+start() {
+	echo -n $"Starting router discovery: "
+	if [ $UID -ne 0 ]; then
+                RETVAL=1
+                failure
+        else
+		daemon /sbin/rdisc $RDISCOPTS
+		RETVAL=$?
+		[ $RETVAL -eq 0 ] && touch /var/lock/subsys/rdisc
+	fi;
+	echo
+	return $RETVAL
+}
+
+stop() {
+	echo -n $"Shutting down router discovery services: "
+	if [ $UID -ne 0 ]; then
+                RETVAL=1
+                failure
+        else
+        	killproc /sbin/rdisc
+		RETVAL=$?
+	        [ $RETVAL -eq 0 ] && rm -f /var/lock/subsys/rdisc
+        fi;
+	echo
+	return $RETVAL
+}
+
+restart() {
+	stop
+	start
+}
+
+RETVAL=0
+
+# See how we were called.
+case "$1" in
+  start)
+	start
+	;;
+  stop)
+	stop
+	;;
+  status)
+	status rdisc
+	;;
+  restart|reload)
+	restart
+	;;
+  *)
+	echo $"Usage: $0 {start|stop|status|restart}"
+	exit 1
+esac
+
+exit $?

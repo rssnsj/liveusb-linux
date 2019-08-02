@@ -1,0 +1,27 @@
+# 这是配置那个tab bar
+hardstatus alwayslastline
+hardstatus string '%{=b}%{b}%-w%{.BW}%1[%n %t]%{-}%+w % '
+termcapinfo xterm|rxvt ti@:te@
+# screen里面的所有进程退出，screen就自动退出
+autodetach on               # default: on
+# 退出vim/nano之后自动刷新屏幕
+altscreen on
+# 启用beep报错
+vbell on
+# 默认的shell，不设置的话就是bash
+shell bash
+##    Keybindings    ##
+# F10改标题
+bindkey -k k; title
+# F11左边的tab
+bindkey -k F1 prev
+# F12右边的tab
+bindkey -k F2 next
+utf8 on
+# 保留日志长度 5k行
+defscrollback 5000
+# Easier scroll
+#bindkey "^[[5~" eval 'copy' 'stuff ^b'  # PgUp | Enter copy/scrollback mode and page up
+#bindkey "^[[6~" eval 'copy' 'stuff ^f'  # PgDown | Enter copy/scrollback mode and page down
+termcapinfo xterm* ti@:te@
+
