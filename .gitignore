@@ -2,6 +2,7 @@
 /bin/boot/ramdisk.img-*
 /bin/boot/grub/grub.cfg
 /bin/boot/boot-initrd.sh
+/bin/boot/host-setting.sh
 /config
 /vfs
 /dl
