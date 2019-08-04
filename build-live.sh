@@ -41,7 +41,20 @@ EOF
 #!/bin/sh -x
 exec ./$VMLINUZ_FILE mem=192m initrd=$RAMDISK_FILE root=/dev/ram0 eth0=tuntap,tap0,00:ab:ab:ab:ab:ba
 EOF
-		chmod +x $BOOT_INSTALL_DIR/boot-initrd.sh
+		# Host setup script example
+		cat > $BOOT_INSTALL_DIR/host-setting.sh <<EOF
+#!/bin/sh -x
+
+ip tuntap del tap0 mode tap
+
+ip tuntap add tap0 mode tap user root
+ifconfig tap0 up
+brctl addif lan1 tap0
+if ! grep '\/dev\/shm' /proc/mounts >/dev/null; then
+	mount shm /dev/shm -t tmpfs
+fi
+EOF
+		chmod +x $BOOT_INSTALL_DIR/{boot-initrd.sh,host-setting.sh}
 	fi
 }
 
