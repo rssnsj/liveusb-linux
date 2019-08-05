@@ -4,20 +4,24 @@ KERNEL_VERSION=4.1.18
 KERNEL_RELEASE=$KERNEL_VERSION-liveusb
 KERNEL_DOWNLOAD_URL="https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.1.18.tar.xz"
 
-VFS_SOURCE_DIR=vfs
+VFS_SOURCE_DIR=rootfs
 BOOT_INSTALL_DIR=bin/boot
 KERNEL_BUILD_DIR=`basename "$KERNEL_DOWNLOAD_URL" | sed 's/\.tar\>.*$//'`
 VMLINUZ_FILE=vmlinuz-$KERNEL_RELEASE
 RAMDISK_FILE=ramdisk.img-$KERNEL_RELEASE
 
-print_green()
+is_tty()
 {
-	local stdin=`readlink /proc/self/fd/0`
-	case "$stdin" in
-		/dev/tty*|/dev/pt*) echo -ne "\033[32m"; echo -n "$@"; echo -e "\033[0m";;
-		*) echo "$@";;
-	esac
+	if [ -z "$_is_tty" ]; then
+		case "`readlink /proc/$$/fd/1`" in
+			/dev/pts/*|/dev/tty*|/dev/pty*) _is_tty=Y;;
+			*) _is_tty=N;;
+		esac
+	fi
+	[ "$_is_tty" = Y ]
 }
+echo_g() { is_tty && echo -e "\033[32m$@\033[0m" || echo "$@"; }
+echo_r() { is_tty && echo -e "\033[31m$@\033[0m" || echo "$@"; }
 
 generate_grub_menu()
 {
@@ -60,6 +64,15 @@ EOF
 
 __prepare_kernel_dir()
 {
+	# Check symlink: config -> config-x.x.x-xxx
+	if ! [ -L config -a -L rootfs ]; then
+		echo_r "*** Create the following symbolic links to go:"
+		echo_r "*** 1. config -> kernel configuration to use (e.g., config-4.1.18-amd64)"
+		echo_r "*** 2. rootfs -> filesystem tree to use (e.g., rootfs-amd64)"
+		echo
+		exit 1
+	fi
+
 	# Check if kernel source exists, if not download it
 	if ! [ -d $KERNEL_BUILD_DIR ]; then
 		local kernel_tar=`basename "$KERNEL_DOWNLOAD_URL"`
@@ -85,17 +98,9 @@ __prepare_kernel_dir()
 				;;
 		esac
 
-		print_green "Extracting the kernel ..."
+		echo_g "Extracting the kernel ..."
 		tar $tar_opts dl/$kernel_tar
-		print_green "Done."
-	fi
-
-	# Check symlink: config -> config-x.x.x-xxx
-	if ! [ -L config -a -L vfs ]; then
-		echo "*** Please create the following symbolic link:"
-		echo "***  config: to one of the kernel configuration files"
-		echo "***  vfs: to 'vfs-i386' or 'vfs-amd64'"
-		exit 1
+		echo_g "Done."
 	fi
 
 	# Set 'ARCH=um' when compiling as UMLinux
@@ -127,7 +132,7 @@ __build_kernel()
 	# Use the config file
 	cat config > $KERNEL_BUILD_DIR/.config
 
-	print_green "Building Linux kernel ..."
+	echo_g "Building Linux kernel ..."
 
 	local i
 	for i in 3 2 1; do
@@ -154,7 +159,7 @@ __build_kernel()
 
 __build_ramdisk()
 {
-	print_green "Building the ramdisk ..."
+	echo_g "Building the ramdisk ..."
 
 	rm -rf rootdir
 	mkdir -p rootdir
@@ -214,7 +219,7 @@ do_build_all()
 	# Write a grub.cfg sample
 	generate_grub_menu
 
-	print_green "Done."
+	echo_g "Done."
 }
 
 do_cleanup()
@@ -223,7 +228,7 @@ do_cleanup()
 		$BOOT_INSTALL_DIR/vmlinuz-* \
 		$BOOT_INSTALL_DIR/ramdisk.img-* 
 
-	rm -rf vfs-*/lib/firmware vfs-*/lib/modules
+	rm -rf rootfs-*/lib/firmware rootfs-*/lib/modules
 
 	if [ -d $KERNEL_BUILD_DIR ]; then
 		# YES by default
