@@ -153,7 +153,7 @@ __build_kernel()
 	fi
 
 	# Install modules
-	rm -rf ./$VFS_SOURCE_DIR/lib/modules ./$VFS_SOURCE_DIR/lib/firmware
+	rm -rf ./$VFS_SOURCE_DIR/lib/{firmware,modules}
 	make modules_install -C $KERNEL_BUILD_DIR INSTALL_MOD_PATH=`pwd`/$VFS_SOURCE_DIR INSTALL_MOD_STRIP=1
 }
 
@@ -225,10 +225,10 @@ do_build_all()
 do_cleanup()
 {
 	rm -rf $BOOT_INSTALL_DIR/grub/grub.cfg \
-		$BOOT_INSTALL_DIR/vmlinuz-* \
-		$BOOT_INSTALL_DIR/ramdisk.img-* 
+		$BOOT_INSTALL_DIR/{vmlinuz-*,ramdisk.img-*} \
+		$BOOT_INSTALL_DIR/{boot-initrd.sh,host-setting.sh}
 
-	rm -rf rootfs-*/lib/firmware rootfs-*/lib/modules
+	rm -rf rootfs-*/lib/{firmware,modules}
 
 	if [ -d $KERNEL_BUILD_DIR ]; then
 		# YES by default

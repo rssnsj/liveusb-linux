@@ -4,8 +4,8 @@
 /bin/boot/boot-initrd.sh
 /bin/boot/host-setting.sh
 /config
-/vfs
+/rootfs
 /dl
 /linux-*/
-/vfs-*/lib/firmware
-/vfs-*/lib/modules
+/rootfs-*/lib/firmware
+/rootfs-*/lib/modules
