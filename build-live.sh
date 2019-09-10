@@ -67,8 +67,8 @@ __prepare_kernel_dir()
 	# Check symlink: config -> config-x.x.x-xxx
 	if ! [ -L config -a -L rootfs ]; then
 		echo_r "*** Create the following symbolic links to go:"
-		echo_r "*** 1. config -> kernel configuration to use (e.g., config-4.1.18-amd64)"
-		echo_r "*** 2. rootfs -> filesystem tree to use (e.g., rootfs-amd64)"
+		echo_r "*** 1. config -> kernel configuration to use (e.g., config-4.1.18-x86_64)"
+		echo_r "*** 2. rootfs -> filesystem tree to use (e.g., rootfs-x86_64)"
 		echo
 		exit 1
 	fi
