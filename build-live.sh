@@ -5,7 +5,7 @@ KERNEL_RELEASE=$KERNEL_VERSION-liveusb
 KERNEL_DOWNLOAD_URL="https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.1.18.tar.xz"
 
 VFS_SOURCE_DIR=rootfs
-BOOT_INSTALL_DIR=bin/boot
+BOOT_INSTALL_DIR=boot
 KERNEL_BUILD_DIR=`basename "$KERNEL_DOWNLOAD_URL" | sed 's/\.tar\>.*$//'`
 VMLINUZ_FILE=vmlinuz-$KERNEL_RELEASE
 RAMDISK_FILE=ramdisk.img-$KERNEL_RELEASE
@@ -25,9 +25,11 @@ echo_r() { is_tty && echo -e "\033[31m$@\033[0m" || echo "$@"; }
 
 generate_grub_menu()
 {
+	mkdir -p $BOOT_INSTALL_DIR
+
 	if [ "$ARCH" != um ]; then
+		cp -a boot-files/boot/grub $BOOT_INSTALL_DIR/
 		# Write a grub.cfg example
-		mkdir -p $BOOT_INSTALL_DIR/grub
 		cat > $BOOT_INSTALL_DIR/grub/grub.cfg <<EOF
 set default=0
 set timeout=5
@@ -134,18 +136,13 @@ __build_kernel()
 
 	echo_g "Building Linux kernel ..."
 
-	local i
-	for i in 3 2 1; do
-		echo "Waiting ${i}s to compile kernel ..."
-		sleep 1
-	done
-
 	# Inherits jobserver parameters from parent Makefile
 	make -C $KERNEL_BUILD_DIR
 	# .config may change during compiling, update the one in source
 	### cat $KERNEL_BUILD_DIR/.config > config
 
 	# Install kernel image
+	mkdir -p $BOOT_INSTALL_DIR
 	if [ "$ARCH" != um ]; then
 		cp $KERNEL_BUILD_DIR/arch/x86/boot/bzImage $BOOT_INSTALL_DIR/$VMLINUZ_FILE
 	else
@@ -210,8 +207,6 @@ EOF
 
 do_build_all()
 {
-	mkdir -p $BOOT_INSTALL_DIR
-
 	__build_kernel
 
 	__build_ramdisk
