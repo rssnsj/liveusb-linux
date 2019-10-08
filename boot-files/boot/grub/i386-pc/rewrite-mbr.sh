@@ -1,31 +1,48 @@
 #!/bin/sh -e
 
-disk="$1"
+target=$1
+core_img=$2
 
-# Ensure a valid disk device rather than a partition
-if [ ! -b "$disk" ]; then
-	echo "*** Not a valid hard disk device '$disk'." >&2
-	exit 1
-elif expr "$disk" : '\/dev\/.*[a-z]$' >/dev/null; then
-	# /dev/sda
+show_help()
+{
+	cat >&2 <<EOF
+Usage:
+  $0 target core_image
+Arguments:
+  target                target hard drive or image file
+  core_image            the proper 'core.img.xxx' image
+EOF
+}
+
+# Check target
+if [ -f "$target" ]; then
+	# a regular file
 	:
-elif expr "$disk" : '\/dev\/mmcblk[0-9]*$' >/dev/null; then
-	# /dev/mmcblk0
+elif [ -b "$target" ] && expr "$target" : '\/dev\/.*[a-z]$' >/dev/null; then
+	# /dev/sda, /dev/vda
 	:
 else
-	echo "*** Not a valid hard disk device '$disk'." >&2
+	echo "*** Expecting hard drive or an image file." >&2
+	show_help
+	exit 1
+fi
+
+# Check core image file
+if [ ! -f "$core_img" ]; then
+	echo "*** Not a valid 'core.img.xxx' image '$core_img'." >&2
+	show_help
 	exit 1
 fi
 
 set -x
 
-# Boot record
+# MBR
 head -c446 boot.img > a
-dd if=$disk bs=512 count=1 of=b
 # Partition table
+dd if=$target bs=512 count=1 of=b
 tail -c66 b > c
-# Final image to write
-cat a c core.img > d
-dd if=d of=$disk bs=32k
-# Cleanups
+# Combine for the final image
+cat a c $core_img > d
+dd if=d of=$target bs=32k count=1 conv=notrunc
+
 rm -f a b c d
