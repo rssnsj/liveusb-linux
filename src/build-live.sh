@@ -5,7 +5,7 @@ KERNEL_RELEASE=$KERNEL_VERSION-liveusb
 KERNEL_DOWNLOAD_URL="https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.1.18.tar.xz"
 
 VFS_SOURCE_DIR=rootfs
-BOOT_INSTALL_DIR=boot
+INSTALL_DIR=bin
 KERNEL_BUILD_DIR=`basename "$KERNEL_DOWNLOAD_URL" | sed 's/\.tar\>.*$//'`
 VMLINUZ_FILE=vmlinuz-$KERNEL_RELEASE
 RAMDISK_FILE=ramdisk.img-$KERNEL_RELEASE
@@ -22,47 +22,6 @@ is_tty()
 }
 echo_g() { is_tty && echo -e "\033[32m$@\033[0m" || echo "$@"; }
 echo_r() { is_tty && echo -e "\033[31m$@\033[0m" || echo "$@"; }
-
-generate_grub_menu()
-{
-	mkdir -p $BOOT_INSTALL_DIR
-
-	if [ "$ARCH" != um ]; then
-		cp -a ../src/boot-files/boot/grub $BOOT_INSTALL_DIR/
-		# Write a grub.cfg example
-		cat > $BOOT_INSTALL_DIR/grub/grub.cfg <<EOF
-set default=0
-set timeout=5
-# set root='(hd0,1)'
-
-menuentry "Linux - $KERNEL_RELEASE (ramdisk)" {
-	linux /boot/$VMLINUZ_FILE root=/dev/ram0 rw
-	initrd /boot/$RAMDISK_FILE
-}
-
-EOF
-	else
-		# Write a boot script example
-		cat > $BOOT_INSTALL_DIR/boot-initrd.sh <<EOF
-#!/bin/sh -x
-exec ./$VMLINUZ_FILE mem=192m initrd=$RAMDISK_FILE root=/dev/ram0 eth0=tuntap,tap0,00:ab:ab:ab:ab:ba
-EOF
-		# Host setup script example
-		cat > $BOOT_INSTALL_DIR/host-setting.sh <<EOF
-#!/bin/sh -x
-
-ip tuntap del tap0 mode tap
-
-ip tuntap add tap0 mode tap user root
-ifconfig tap0 up
-brctl addif lan1 tap0
-if ! grep '\/dev\/shm' /proc/mounts >/dev/null; then
-	mount shm /dev/shm -t tmpfs
-fi
-EOF
-		chmod +x $BOOT_INSTALL_DIR/{boot-initrd.sh,host-setting.sh}
-	fi
-}
 
 __prepare_kernel_dir()
 {
@@ -125,7 +84,7 @@ do_menuconfig()
 	cat $KERNEL_BUILD_DIR/.config > config
 }
 
-__build_kernel()
+build_kernel()
 {
 	__prepare_kernel_dir
 
@@ -140,11 +99,10 @@ __build_kernel()
 	### cat $KERNEL_BUILD_DIR/.config > config
 
 	# Install kernel image
-	mkdir -p $BOOT_INSTALL_DIR
-	if [ "$ARCH" != um ]; then
-		cp $KERNEL_BUILD_DIR/arch/x86/boot/bzImage $BOOT_INSTALL_DIR/$VMLINUZ_FILE
+	if [ "$ARCH" = um ]; then
+		cp $KERNEL_BUILD_DIR/linux $VMLINUZ_FILE
 	else
-		cp $KERNEL_BUILD_DIR/linux $BOOT_INSTALL_DIR/$VMLINUZ_FILE
+		cp $KERNEL_BUILD_DIR/arch/x86/boot/bzImage $VMLINUZ_FILE
 	fi
 
 	# Install modules
@@ -152,7 +110,7 @@ __build_kernel()
 	make modules_install -C $KERNEL_BUILD_DIR INSTALL_MOD_PATH=`pwd`/$VFS_SOURCE_DIR INSTALL_MOD_STRIP=1
 }
 
-__build_ramdisk()
+build_ramdisk()
 {
 	echo_g "Building the ramdisk ..."
 
@@ -175,12 +133,12 @@ __build_ramdisk()
 		chmod 600 etc/ssh/*_key
 		chmod 755 var/empty/sshd
 
-		if [ "$ARCH" != um ]; then
-			# Remove console tty0 for regular system
-			sed -i '/^0:.*\<tty0/d' etc/inittab
-		else
+		if [ "$ARCH" = um ]; then
 			# Remove tty1-6, ttyS0 for UMLinux
 			sed -i '/^[1-6]:.*\<tty[1-6]/d; /^S0:.*ttyS0/d' etc/inittab
+		else
+			# Remove console tty0 for regular system
+			sed -i '/^0:.*\<tty0/d' etc/inittab
 		fi
 	)
 
@@ -197,31 +155,75 @@ __build_ramdisk()
 EOF
 
 	genext2fs -b 45056 -d rootdir -i 4096 -m 0 -U -D devicetable imgfile
-	gzip -c imgfile > $BOOT_INSTALL_DIR/$RAMDISK_FILE
+	gzip -c < imgfile > $RAMDISK_FILE
 
 	rm -f imgfile devicetable
 	rm -rf rootdir
 }
 
+# Create the target file tree
+install_targets()
+{
+	echo_g "Installing files to $INSTALL_DIR/ ..."
+
+	mkdir -p $INSTALL_DIR
+
+	if [ "$ARCH" = um ]; then
+		mv $VMLINUZ_FILE $RAMDISK_FILE $INSTALL_DIR/
+		# Write a boot script example
+		cat > $INSTALL_DIR/boot-initrd.sh <<EOF
+#!/bin/sh -x
+exec ./$VMLINUZ_FILE mem=192m initrd=$RAMDISK_FILE root=/dev/ram0 eth0=tuntap,tap0,00:ab:ab:ab:ab:ba
+EOF
+		# Host setup script example
+		cat > $INSTALL_DIR/host-setting.sh <<EOF
+#!/bin/sh -x
+
+ip tuntap del tap0 mode tap
+
+ip tuntap add tap0 mode tap user root
+ifconfig tap0 up
+brctl addif lan1 tap0
+if ! grep '\/dev\/shm' /proc/mounts >/dev/null; then
+	mount shm /dev/shm -t tmpfs
+fi
+EOF
+		chmod +x $INSTALL_DIR/{boot-initrd.sh,host-setting.sh}
+	else
+		cp -a ../src/boot-files/{boot,EFI} $INSTALL_DIR/
+		mv $VMLINUZ_FILE $RAMDISK_FILE $INSTALL_DIR/boot/
+		# Write a grub.cfg example
+		cat > $INSTALL_DIR/boot/grub/grub.cfg <<EOF
+set default=0
+set timeout=5
+# set root='(hd0,1)'
+
+menuentry "Linux - $KERNEL_RELEASE (ramdisk)" {
+	linux /boot/$VMLINUZ_FILE root=/dev/ram0 rw
+	initrd /boot/$RAMDISK_FILE
+}
+
+EOF
+		tar -C $INSTALL_DIR/boot --owner=root --group=root -zcf $INSTALL_DIR/grub.tar.gz grub
+	fi
+}
+
 do_build_all()
 {
-	__build_kernel
+	build_kernel
 
-	__build_ramdisk
+	build_ramdisk
 
-	# Write a grub.cfg sample
-	generate_grub_menu
+	install_targets
 
 	echo_g "Done."
 }
 
 do_cleanup()
 {
-	rm -rf $BOOT_INSTALL_DIR/grub/grub.cfg \
-		$BOOT_INSTALL_DIR/{vmlinuz-*,ramdisk.img-*} \
-		$BOOT_INSTALL_DIR/{boot-initrd.sh,host-setting.sh}
-
-	rm -rf rootfs-*/lib/{firmware,modules}
+	rm -f $VMLINUZ_FILE $RAMDISK_FILE
+	rm -rf $INSTALL_DIR
+	rm -rf rootfs/lib/{firmware,modules}
 
 	if [ -d $KERNEL_BUILD_DIR ]; then
 		# YES by default
@@ -247,11 +249,8 @@ case "$1" in
 	clean)
 		do_cleanup
 		;;
-	build_ramdisk)
-		__build_ramdisk
-		;;
-	build_kernel)
-		__build_kernel
+	build_ramdisk|build_kernel|install_targets)
+		"$@"
 		;;
 	*)
 		echo "Bootable LiveUSB Linux creator."

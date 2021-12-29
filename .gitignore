@@ -2,5 +2,4 @@
 /*/linux-*/
 /*/rootfs/lib/firmware
 /*/rootfs/lib/modules
-/i386*/boot
-/x86_64*/boot
+/*/bin/
