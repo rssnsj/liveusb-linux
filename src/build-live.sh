@@ -28,7 +28,7 @@ generate_grub_menu()
 	mkdir -p $BOOT_INSTALL_DIR
 
 	if [ "$ARCH" != um ]; then
-		cp -a boot-files/boot/grub $BOOT_INSTALL_DIR/
+		cp -a ../src/boot-files/boot/grub $BOOT_INSTALL_DIR/
 		# Write a grub.cfg example
 		cat > $BOOT_INSTALL_DIR/grub/grub.cfg <<EOF
 set default=0
@@ -67,10 +67,8 @@ EOF
 __prepare_kernel_dir()
 {
 	# Check symlink: config -> config-x.x.x-xxx
-	if ! [ -L config -a -L rootfs ]; then
-		echo_r "*** Create the following symbolic links to go:"
-		echo_r "*** 1. config -> kernel configuration to use (e.g., config-4.1.18-x86_64)"
-		echo_r "*** 2. rootfs -> filesystem tree to use (e.g., rootfs-x86_64)"
+	if ! [ -d rootfs ]; then
+		echo_r "*** Directory 'rootfs' does not exist."
 		echo
 		exit 1
 	fi
