@@ -61,13 +61,6 @@ __prepare_kernel_dir()
 		tar $tar_opts dl/$kernel_tar
 		echo_g "Done."
 	fi
-
-	# Set 'ARCH=um' when compiling as UMLinux
-	if grep '\<CONFIG_UML=y\>' config >/dev/null; then
-		export ARCH=um
-	else
-		unset ARCH
-	fi
 }
 
 do_menuconfig()
@@ -99,11 +92,7 @@ build_kernel()
 	### cat $KERNEL_BUILD_DIR/.config > config
 
 	# Install kernel image
-	if [ "$ARCH" = um ]; then
-		cp $KERNEL_BUILD_DIR/linux $VMLINUZ_FILE
-	else
-		cp $KERNEL_BUILD_DIR/arch/x86/boot/bzImage $VMLINUZ_FILE
-	fi
+	cp $KERNEL_BUILD_DIR/arch/x86/boot/bzImage $VMLINUZ_FILE
 
 	# Install modules
 	rm -rf ./$VFS_SOURCE_DIR/lib/{firmware,modules}
@@ -133,13 +122,8 @@ build_ramdisk()
 		chmod 600 etc/ssh/*_key
 		chmod 755 var/empty/sshd
 
-		if [ "$ARCH" = um ]; then
-			# Remove tty1-6, ttyS0 for UMLinux
-			sed -i '/^[1-6]:.*\<tty[1-6]/d; /^S0:.*ttyS0/d' etc/inittab
-		else
-			# Remove console tty0 for regular system
-			sed -i '/^0:.*\<tty0/d' etc/inittab
-		fi
+		# Remove console tty0 for regular system
+		sed -i '/^0:.*\<tty0/d' etc/inittab
 	)
 
 	cat > devicetable <<EOF
@@ -168,32 +152,10 @@ install_targets()
 
 	mkdir -p $INSTALL_DIR
 
-	if [ "$ARCH" = um ]; then
-		mv $VMLINUZ_FILE $RAMDISK_FILE $INSTALL_DIR/
-		# Write a boot script example
-		cat > $INSTALL_DIR/boot-initrd.sh <<EOF
-#!/bin/sh -x
-exec ./$VMLINUZ_FILE mem=192m initrd=$RAMDISK_FILE root=/dev/ram0 eth0=tuntap,tap0,00:ab:ab:ab:ab:ba
-EOF
-		# Host setup script example
-		cat > $INSTALL_DIR/host-setting.sh <<EOF
-#!/bin/sh -x
-
-ip tuntap del tap0 mode tap
-
-ip tuntap add tap0 mode tap user root
-ifconfig tap0 up
-brctl addif lan1 tap0
-if ! grep '\/dev\/shm' /proc/mounts >/dev/null; then
-	mount shm /dev/shm -t tmpfs
-fi
-EOF
-		chmod +x $INSTALL_DIR/{boot-initrd.sh,host-setting.sh}
-	else
-		cp -a ../src/boot-files/{boot,EFI} $INSTALL_DIR/
-		mv $VMLINUZ_FILE $RAMDISK_FILE $INSTALL_DIR/boot/
-		# Write a grub.cfg example
-		cat > $INSTALL_DIR/boot/grub/grub.cfg <<EOF
+	cp -a ../src/boot-files/{boot,EFI} $INSTALL_DIR/
+	mv $VMLINUZ_FILE $RAMDISK_FILE $INSTALL_DIR/boot/
+	# Write a grub.cfg example
+	cat > $INSTALL_DIR/boot/grub/grub.cfg <<EOF
 set default=0
 set timeout=5
 # set root='(hd0,1)'
@@ -204,8 +166,7 @@ menuentry "Linux - $KERNEL_RELEASE (ramdisk)" {
 }
 
 EOF
-		tar -C $INSTALL_DIR/boot --owner=root --group=root -zcf $INSTALL_DIR/grub.tar.gz grub
-	fi
+	tar -C $INSTALL_DIR/boot --owner=root --group=root -zcf $INSTALL_DIR/grub.tar.gz grub
 }
 
 do_build_all()
