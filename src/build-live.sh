@@ -1,8 +1,8 @@
 #!/bin/bash -e
 
-KERNEL_VERSION=4.1.18
+KERNEL_VERSION=4.20
 KERNEL_RELEASE=$KERNEL_VERSION-liveusb
-KERNEL_DOWNLOAD_URL="https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.1.18.tar.xz"
+KERNEL_DOWNLOAD_URL="https://cdn.kernel.org/pub/linux/kernel/v4.x/linux-4.20.tar.xz"
 
 VFS_SOURCE_DIR=rootfs
 INSTALL_DIR=bin
