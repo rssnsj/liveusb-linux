@@ -166,7 +166,7 @@ menuentry "Linux - $KERNEL_RELEASE (ramdisk)" {
 }
 
 EOF
-	tar -C $INSTALL_DIR/boot --owner=root --group=root -zcf $INSTALL_DIR/grub.tar.gz grub
+	tar -C $INSTALL_DIR --owner=root --group=root -zcf $INSTALL_DIR/boot-partition.tar.gz boot EFI
 }
 
 do_build_all()
