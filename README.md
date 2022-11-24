@@ -1,10 +1,16 @@
 # liveusb-linux
-Ramdisk-based Linux Operating System for System Repair and Rescue Uses
+Ramdisk mode Linux operating system for system repair and rescue use
 
-### Boot the guest system
+### How to build
 
-    # Boot in ramdisk mode
-    ./vmlinuz-4.1.18-liveusb mem=256m initrd=ramdisk.img-4.1.18-liveusb root=/dev/ram0 eth0=tuntap,tap0
+Install prerequisites for compiling
 
-    # Boot with a pre-created disk image
-    ./vmlinuz-4.1.18-liveusb mem=256m ubda=virtual-disk.img root=/dev/ubda1 eth0=tuntap,tap0
+    # Ubuntu:
+    sudo apt-get install libncurses-dev bison flex libelf-dev elfutils
+    # CentOS
+    sudo yum install ncurses-devel bison flex elfutils-libelf-devel elfutils-devel
+
+Compile and build
+
+    make -j`nproc`
+
