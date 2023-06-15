@@ -1,8 +1,8 @@
 #!/bin/bash -e
 
-KERNEL_VERSION=5.4
+KERNEL_VERSION=5.15
 KERNEL_RELEASE=$KERNEL_VERSION-liveusb
-KERNEL_DOWNLOAD_URL="https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.4.tar.xz"
+KERNEL_DOWNLOAD_URL="https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-5.15.tar.xz"
 
 VFS_SOURCE_DIR=rootfs
 INSTALL_DIR=bin
@@ -183,7 +183,7 @@ ip tuntap del tap0 mode tap
 
 ip tuntap add tap0 mode tap user root
 ifconfig tap0 up
-brctl addif lan1 tap0
+brctl addif br0 tap0
 if ! grep '\/dev\/shm' /proc/mounts >/dev/null; then
 	mount shm /dev/shm -t tmpfs
 fi
