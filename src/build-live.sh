@@ -183,7 +183,7 @@ ip tuntap del tap0 mode tap
 
 ip tuntap add tap0 mode tap user `id -un`
 ifconfig tap0 up
-brctl addif br1 tap0
+brctl addif br0 tap0
 if ! grep '\/dev\/shm' /proc/mounts >/dev/null; then
 	mount shm /dev/shm -t tmpfs
 fi
